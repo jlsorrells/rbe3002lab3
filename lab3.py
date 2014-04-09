@@ -1,27 +1,18 @@
 #!/usr/bin/env python
 
 import rospy, tf
-from kobuki_msgs.msg import BumperEvent
-from nav_msgs.msg._MapMetaData import MapMetaData
 from geometry_msgs.msg._PoseStamped import PoseStamped
-from move_base_msgs.msg._MoveBaseActionGoal import MoveBaseActionGoal
-from tf2_msgs.msg._TFMessage import TFMessage
-from std_msgs.msg._Float64 import Float64
 from nav_msgs.msg._OccupancyGrid import OccupancyGrid
-from sensor_msgs.msg._LaserScan import LaserScan
 from nav_msgs.msg._GridCells import GridCells
 from geometry_msgs.msg._Point import Point
 from geometry_msgs.msg._PoseWithCovarianceStamped import PoseWithCovarianceStamped
 from numpy import sign, ndarray
 from visualization_msgs.msg._Marker import Marker
-from numpy.oldnumeric import arrayfns
 
 #TODO
 #make launch file to start map_server and this and rviz at the same time
 #somehow make rviz's grid line up with the map (its working now??)
 #send robot model to rviz
-#remove unused imports
-#fix error when start and goal are the same cell
 
 class point:
     def __init__(self, x1, y1, Parent, Cost):
@@ -59,12 +50,14 @@ class point:
         result = []
         
         tempPoint = point(self.x, self.y, self.parent, self.cost)
+        arrayTravelled.remove(self)
         while tempPoint.x != start.x or tempPoint.y != start.y:
             result.append(tempPoint)
             tempPoint = tempPoint.parent
+            arrayTravelled.remove(tempPoint)
         result.append(tempPoint)
-        displayPath(result) 
-	displayWaypoints(pathWaypoints(result))
+        displayPath(result)
+        displayWaypoints(pathWaypoints(result))
     
 
 def createArray(inputPoints):
@@ -134,7 +127,7 @@ def aStar(startnode):
         #rospy.sleep(rospy.Duration(.05, 0))
     
     #return 0 if no path is found
-    rospy.logerr("no path found from (%d, %d) to (%d, %d)", 
+    rospy.logwarn("no path found from (%d, %d) to (%d, %d)", 
                  start.x, start.y, goal.x, goal.y)
     return 0
         
@@ -186,11 +179,12 @@ def read_map(msg):
     map = msg 
     
     displayPath([])
+    displayWaypoints([])
     result = aStar(point(start.x, start.y, 0, 0))
     rospy.sleep(rospy.Duration(.05, 0))
-    displayProgress(arrayTravelled, arrayFrontier)
     if result != 0:
         result.getPath()
+    displayProgress(arrayTravelled, arrayFrontier)
     
     #print msg
     #print "\n"
@@ -226,11 +220,12 @@ def read_goal(msg):
     #print goal
     
     displayPath([])
+    displayWaypoints([])
     result = aStar(point(start.x, start.y, 0, 0))
     rospy.sleep(rospy.Duration(.05, 0))
-    displayProgress(arrayTravelled, arrayFrontier)
     if result != 0:
         result.getPath()
+    displayProgress(arrayTravelled, arrayFrontier)
     
     
 def read_start(msg):
@@ -264,11 +259,12 @@ def read_start(msg):
     #print start
     
     displayPath([])
+    displayWaypoints([])
     result = aStar(point(start.x, start.y, 0, 0))
     rospy.sleep(rospy.Duration(.05, 0))
-    displayProgress(arrayTravelled, arrayFrontier)
     if result != 0:
         result.getPath()
+    displayProgress(arrayTravelled, arrayFrontier)
     
 def displayProgress(e_array, f_array):
     global explored_pub
@@ -301,6 +297,7 @@ def displayProgress(e_array, f_array):
 def displayPath(p_array):
     global path_pub
     global map
+    global arrayTravelled
     
     cells = GridCells()
     cells.cell_height = map.info.resolution
@@ -365,11 +362,11 @@ def pathWaypoints(path):
 	current_y_velocity = i.y - i.parent.y
 	if current_x_velocity != previous_x_velocity or current_y_velocity != previous_y_velocity: 
 	    endpoints.append(i)
-	    print (i.x,i.y)
+	    #print (i.x,i.y)
 	    previous_x_velocity = current_x_velocity
 	    previous_y_velocity = current_y_velocity
     endpoints.append(path[-1])
-    print (path[-1].x, path[-1].y)
+    #print (path[-1].x, path[-1].y)
     endpoints.reverse()
     return endpoints
     
