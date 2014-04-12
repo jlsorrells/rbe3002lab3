@@ -1,7 +1,6 @@
 <launch>
-	<arg name = "map" default = "~/Maps/simple_map.yaml/>
-
-	<node pkg = "rviz" name = "rviz" type = "rviz"/>
-	<node pkg = "map_server" name = "map_server" type = "map_server" args = "$(arg map)"/>
-	<node pkg = "lab3" name = "lab3" type = "lab3">
+ <arg name="map" default="/home/test/Maps/simple_map.yaml"/>
+ <node pkg="map_server" name="map_server" type="map_server" args="$(arg map)"/>
+ <node pkg="rviz" name="rviz" type="rviz"/>
+ <node pkg="lab3" name="lab3" type="script_cant_have_the_same_name_as_the_package.py"/>
 </launch>
