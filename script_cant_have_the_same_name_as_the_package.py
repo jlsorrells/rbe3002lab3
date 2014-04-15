@@ -122,8 +122,11 @@ def aStar(startnode):
     createArray(map.data)
     
     freeSpaceValue = 50
+    maxloops = 1000
     
-    while len(arrayFrontier) != 0:
+    while len(arrayFrontier) != 0 and maxloops > 0:
+        
+        maxloops = maxloops - 1
         
         node = arrayFrontier[0]
     
@@ -319,8 +322,8 @@ def displayProgress(e_array, f_array):
     #publish explored cells
     array = []
     for i in e_array:
-        x = (i.x + map.info.width)*map.info.resolution + map.info.origin.position.x
-        y = -((i.y)*map.info.resolution - map.info.origin.position.y)
+        x = (i.x + map.info.width+0.5)*map.info.resolution + map.info.origin.position.x
+        y = -((i.y+0.5)*map.info.resolution - map.info.origin.position.y)
         array.append(Point(x,y,0))
     cells.cells = array
     explored_pub.publish(cells)
@@ -328,8 +331,8 @@ def displayProgress(e_array, f_array):
     #publish frontier cells
     array = []
     for i in f_array:
-        x = (i.x + map.info.width)*map.info.resolution + map.info.origin.position.x
-        y = -((i.y)*map.info.resolution - map.info.origin.position.y)
+        x = (i.x + map.info.width+0.5)*map.info.resolution + map.info.origin.position.x
+        y = -((i.y+0.5)*map.info.resolution - map.info.origin.position.y)
         array.append(Point(x,y,0))
     cells.cells = array
     frontier_pub.publish(cells)
@@ -347,8 +350,8 @@ def displayPath(p_array):
     #publish path cells
     array = []
     for i in p_array:
-        x = (i.x + map.info.width)*map.info.resolution + map.info.origin.position.x
-        y = -((i.y)*map.info.resolution - map.info.origin.position.y)
+        x = (i.x + map.info.width+0.5)*map.info.resolution + map.info.origin.position.x
+        y = -((i.y+0.5)*map.info.resolution - map.info.origin.position.y)
         array.append(Point(x,y,0))
     cells.cells = array
     path_pub.publish(cells)
@@ -381,10 +384,10 @@ def displayWaypoints(w_array):
         marker.scale.x = map.info.resolution/3
         marker.scale.y = 2*map.info.resolution/3
         marker.points = []
-        x1 = (w_array[i-1].x + map.info.width)*map.info.resolution + map.info.origin.position.x
-        y1 = -((w_array[i-1].y)*map.info.resolution - map.info.origin.position.y)
-        x2 = (w_array[i].x + map.info.width)*map.info.resolution + map.info.origin.position.x
-        y2 = -((w_array[i].y)*map.info.resolution - map.info.origin.position.y)
+        x1 = (w_array[i-1].x + map.info.width+0.5)*map.info.resolution + map.info.origin.position.x
+        y1 = -((w_array[i-1].y+0.5)*map.info.resolution - map.info.origin.position.y)
+        x2 = (w_array[i].x + map.info.width+0.5)*map.info.resolution + map.info.origin.position.x
+        y2 = -((w_array[i].y+0.5)*map.info.resolution - map.info.origin.position.y)
         marker.points.append(Point(x1, y1, 0))
         marker.points.append(Point(x2, y2, 0))
         marker_pub.publish(marker)
