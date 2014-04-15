@@ -6,14 +6,16 @@ from lab3.srv import *
 from geometry_msgs.msg._Point import Point
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from math import atan2, pi
+from math import atan2, pi, trunc, ceil
 from numpy import sign
+from nav_msgs.msg._OccupancyGrid import OccupancyGrid
+from rospy.client import wait_for_message
 
-def myclient(start, goal):
+def myclient(start, goal, map):
     rospy.wait_for_service('Astar_pathfinding')
     try:
         myservice = rospy.ServiceProxy('Astar_pathfinding', FindPath)
-        stuff = myservice(start, goal)
+        stuff = myservice(start, goal, map)
         return stuff.waypoints
     except rospy.ServiceException, e:
         print "Service call failed: %s"%e
@@ -43,6 +45,10 @@ def driveStraight(speed, distance):
         #start/stop more slowly
         #ramps up from speed/5 to speed over the first 20% of the distance, then down to 0 over the last 30%
         ratio = ((start_position.x-position.x)**2+(start_position.y-position.y)**2)**.5 / distance
+        
+        #dont actually ramp
+        ratio = 0.5
+        
         if ratio < .2:
             #ramping up
             twist.linear.x = (1.0/5.0 + ratio*20.0/5.0) * speed
@@ -78,7 +84,7 @@ def rotate(angle):
     twist.linear.z = 0
     twist.angular.x = 0
     twist.angular.y = 0
-    twist.angular.z = -sign(angle/180.0*pi - start_orientation)
+    twist.angular.z = sign(angle/180.0*pi - orientation)
     #pub.publish(twist)
     print twist
     
@@ -114,15 +120,18 @@ def rotate(angle):
         elif ratio < 0:
             ratio = 0
             
+        #this stops all the ramping stuff
+        ratio = 0.5
+            
         if ratio < .2:
-            twist.angular.z = -(1.0/3.0 + ratio*10.0/3.0) * sign(distance)
+            twist.angular.z = -(2.0/3.0 + ratio*1.0/3.0) * sign(distance)
         elif ratio > .7:
             twist.angular.z = -(1.0 - (ratio - 0.7)*13.3/3.0) * sign(distance)
         else:
             twist.angular.z = -sign(distance)
             
-        if twist.angular.z < .05:
-            twist.angular.z = .05
+        #if twist.angular.z < .05:
+            #twist.angular.z = .05
         pub.publish(twist)
         rospy.sleep(rospy.Duration(0, 1000000))
     
@@ -150,43 +159,120 @@ def read_odometry(msg):
     #angles are confusing
     orientation = atan2(2*(quat.y*quat.x+quat.w*quat.z),quat.w**2+quat.x**2-quat.y**2-quat.z**2)
 
+def expandObstacle(inputMap):
+    
+    robotRadius = .25
+    expandedObsVal = 1
+    newGrid = OccupancyGrid()
+    newGrid.data = list(inputMap.data)
+    newGrid.header = inputMap.header
+    newGrid.info = inputMap.info
+    inputArray = inputMap.data
+    gridResolution = newGrid.info.resolution
+    gridWidth = newGrid.info.width
+    
+    n = 0
+    print "expanding obstacles"
+    numExpansions = ceil(robotRadius/gridResolution)
+    
+    for n in range(len(inputArray)):
+            
+        if inputArray[n] > 0:
+            #determine L bound
+            if n%gridWidth < numExpansions:
+                L = n%gridWidth
+            else:
+                L = numExpansions
+            #determine Upper bound
+            if n/gridWidth < numExpansions:
+                D = trunc(n/gridWidth)
+            else:
+                D = numExpansions        
+            #determine R bound
+            if gridWidth - n%gridWidth - 1 < numExpansions:
+                R = gridWidth - n%gridWidth - 1
+            else:
+                R = numExpansions
+            #determine depth
+            if len(inputArray) - n <= numExpansions * gridWidth:
+                U = trunc((len(inputArray) - n - 1)/gridWidth)
+            else:
+                U = numExpansions
+        
+            n2 = 0
+            n3 = 0
+        
+            for n2 in range(int(U+D+1)):
+                for n3 in range(int(L+R+1)):
+                    #print "girdwidth %s, U %s, L %s, D %s, R %s"%(gridWidth,U,L,D,R)
+                    tempLoc = int(n + gridWidth * (U - n2) + (n3 - L))
+                    #print "n = %s, temploc = %s (%s, %s)"%(n, tempLoc, n3, n2)
+                    newGrid.data[tempLoc] += inputArray[n] * expandedObsVal
+                    if newGrid.data[tempLoc] > 100:
+                        newGrid.data[tempLoc] = 100
+    global map_pub
+    #for i in xrange(10000):
+        #map_pub.publish(newGrid)
+    return newGrid
+
+def read_map(msg):
+    global map 
+    global arrayTravelled
+    global arrayFrontier
+    global position
+    global goal
+    
+    print "received new map"
+    #save the most recent map
+    temp_map = msg 
+    #print map
+    map = expandObstacle(temp_map)
+
+    mapresolution = map.info.resolution
+    start = Point(position.x, position.y, 0)
+    
+    path = myclient(start, goal, map)
+    j = Point(start.x,start.y,0)
+    print "current location is (%s, %s)"%(start.x, start.y)
+    if not path:
+        print "unable to reach goal (%s, %s)"%(goal.x, goal.y)
+        return
+    i = path[1]
+    distance = ((i.x-j.x)**2+(i.y-j.y)**2)**.5
+    angle = atan2(i.y - j.y, i.x - j.x)*180.0/pi
+    print "driving from (%s,%s) to (%s,%s)"%(j.x,j.y,i.x,i.y)
+    print "turning to angle %s degrees, then driving %s meters"%(angle, distance)
+    #turn to the correct direction
+    rotate(angle)
+    #then drive the distance
+    driveStraight(0.5, distance)
+
 if __name__ == "__main__":
     
     global pub
+    global map_pub
+    global map
+    global goal
     
     rospy.init_node('barth_sorrells_wu_lab4_node')
     
-    if len(sys.argv) == 5:
-        start = Point(float(sys.argv[1]), float(sys.argv[2]), float(0))
-        goal = Point(float(sys.argv[3]), float(sys.argv[4]), float(0))
+    if len(sys.argv) == 3:
+        #start = Point(float(sys.argv[1]), float(sys.argv[2]), float(0))
+        goal = Point(float(sys.argv[1]), float(sys.argv[2]), float(0))
     else:
         sys.exit(1)
         
     pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist)
     odom_sub = rospy.Subscriber('/odom', Odometry, read_odometry, queue_size=1) # Callback function to read in robot Odometry messages
+    map_sub = rospy.Subscriber('/map', OccupancyGrid, read_map, queue_size=1)
+    map_pub = rospy.Publisher('/map2', OccupancyGrid)
         
     rospy.sleep(rospy.Duration(1.0))
+    
+    #print "Requesting path to (%s,%s)"%(goal.x, goal.y)
         
-    print "Requesting path from (%s,%s) to (%s,%s)"%(start.x, start.y, goal.x, goal.y)
-    path = myclient(start, goal)
-    if not path:
-        print "unable to get path"
-        sys.exit(0)
+    rospy.spin()
     
-    #TODO, fix this
-    mapresolution = .2
     
-    j = Point(start.x,start.y,0)
-    for i in path[1:]:
-        #calculate needed motions
-        distance = mapresolution*((i.x-j.x)**2+(i.y-j.y)**2)**.5
-        angle = atan2(i.y - j.y, i.x - j.x)*180.0/pi
-        print "driving from (%s,%s) to (%s,%s)"%(j.x,j.y,i.x,i.y)
-        print "turning to angle %s degrees, then driving %s meters"%(angle, distance)
-        #turn to the correct direction
-        rotate(angle)
-        #then drive the distance
-        driveStraight(0.5, distance)
-        #save previous
-        j = i
+  
         

@@ -78,9 +78,18 @@ def createArray(inputPoints):
 def Astar_srv(req):
     global start
     global goal
+    global map
     
     goal = req.goal
     start = req.start
+    map = req.map
+    
+    map_pub.publish(map)
+    
+    start.x = int((start.x - map.info.origin.position.x) / map.info.resolution) - map.info.width
+    start.y = int((-start.y + map.info.origin.position.y) / map.info.resolution)
+    goal.x = int((goal.x - map.info.origin.position.x) / map.info.resolution) - map.info.width
+    goal.y = int((-goal.y + map.info.origin.position.y) / map.info.resolution)
     
     displayPath([])
     displayWaypoints([])
@@ -92,7 +101,9 @@ def Astar_srv(req):
         displayProgress(arrayTravelled, arrayFrontier)
         result = []
         for i in waypoints:
-            result.append(Point(i.x, i.y, 0))
+            result.append(Point((i.x+map.info.width)*map.info.resolution + map.info.origin.position.x, 
+                                -((i.y)*map.info.resolution - map.info.origin.position.y), 
+                                0))
         return FindPathResponse(result)
     else:
         pass
@@ -104,6 +115,7 @@ def aStar(startnode):
     global arrayTravelled
     global arrayFrontier
     global map
+    global goal
     
     arrayTravelled = []
     arrayFrontier = [startnode]
@@ -120,6 +132,7 @@ def aStar(startnode):
         
         #add point to travelled
         arrayTravelled.append(node)
+        #print "exploring point (%s, %s)"%(x1,y1)
         arrayFrontier.pop(0)
         
         if x1 == goal.x and y1 == goal.y:
@@ -169,7 +182,6 @@ def getHeuristics(x1, y1):
 def frontierAdd(x1, y1, node):
     global arrayTravelled
     global arrayFrontier
-
     
     newPoint = point(x1, y1, node, 0)
     newPoint.cost = newPoint.getCost()
@@ -307,8 +319,8 @@ def displayProgress(e_array, f_array):
     #publish explored cells
     array = []
     for i in e_array:
-        x = (i.x - map.info.width/2)*map.info.resolution
-        y = (-i.y + map.info.height/2)*map.info.resolution
+        x = (i.x + map.info.width)*map.info.resolution + map.info.origin.position.x
+        y = -((i.y)*map.info.resolution - map.info.origin.position.y)
         array.append(Point(x,y,0))
     cells.cells = array
     explored_pub.publish(cells)
@@ -316,8 +328,8 @@ def displayProgress(e_array, f_array):
     #publish frontier cells
     array = []
     for i in f_array:
-        x = (i.x - map.info.width/2)*map.info.resolution
-        y = (-i.y + map.info.height/2)*map.info.resolution
+        x = (i.x + map.info.width)*map.info.resolution + map.info.origin.position.x
+        y = -((i.y)*map.info.resolution - map.info.origin.position.y)
         array.append(Point(x,y,0))
     cells.cells = array
     frontier_pub.publish(cells)
@@ -335,8 +347,8 @@ def displayPath(p_array):
     #publish path cells
     array = []
     for i in p_array:
-        x = (i.x - map.info.width/2)*map.info.resolution
-        y = (-i.y + map.info.height/2)*map.info.resolution
+        x = (i.x + map.info.width)*map.info.resolution + map.info.origin.position.x
+        y = -((i.y)*map.info.resolution - map.info.origin.position.y)
         array.append(Point(x,y,0))
     cells.cells = array
     path_pub.publish(cells)
@@ -369,10 +381,10 @@ def displayWaypoints(w_array):
         marker.scale.x = map.info.resolution/3
         marker.scale.y = 2*map.info.resolution/3
         marker.points = []
-        x1 = (w_array[i-1].x - map.info.width/2)*map.info.resolution
-        y1 = (-w_array[i-1].y + map.info.height/2)*map.info.resolution
-        x2 = (w_array[i].x - map.info.width/2)*map.info.resolution
-        y2 = (-w_array[i].y + map.info.height/2)*map.info.resolution
+        x1 = (w_array[i-1].x + map.info.width)*map.info.resolution + map.info.origin.position.x
+        y1 = -((w_array[i-1].y)*map.info.resolution - map.info.origin.position.y)
+        x2 = (w_array[i].x + map.info.width)*map.info.resolution + map.info.origin.position.x
+        y2 = -((w_array[i].y)*map.info.resolution - map.info.origin.position.y)
         marker.points.append(Point(x1, y1, 0))
         marker.points.append(Point(x2, y2, 0))
         marker_pub.publish(marker)
@@ -420,11 +432,12 @@ if __name__ == '__main__':
     explored_pub = rospy.Publisher('/lab3/exploredcells', GridCells)
     frontier_pub = rospy.Publisher('/lab3/frontiercells', GridCells)
     marker_pub = rospy.Publisher('/lab3/markers', Marker)
+    map_pub = rospy.Publisher('/map2', OccupancyGrid)
     
     #subscribers
-    move_base_simple_goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, read_goal, queue_size=1)
-    map_sub = rospy.Subscriber('/map', OccupancyGrid, read_map, queue_size=1)
-    initial_pose_sub = rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, read_start, queue_size=1)
+    #move_base_simple_goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, read_goal, queue_size=1)
+    #map_sub = rospy.Subscriber('/map', OccupancyGrid, read_map, queue_size=1)
+    #initial_pose_sub = rospy.Subscriber('/initialpose', PoseWithCovarianceStamped, read_start, queue_size=1)
 
     #services
     service = rospy.Service('Astar_pathfinding', FindPath, Astar_srv)
