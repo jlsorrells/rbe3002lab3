@@ -79,6 +79,7 @@ def Astar_srv(req):
     global start
     global goal
     global map
+    global map_pub
     
     goal = req.goal
     start = req.start
@@ -421,6 +422,7 @@ if __name__ == '__main__':
     global path_pub
     global explored_pub
     global frontier_pub
+    global map_pub
     
     global start
     global goal

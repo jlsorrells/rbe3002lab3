@@ -11,6 +11,7 @@ from math import atan2, pi, trunc, ceil
 from numpy import sign
 from nav_msgs.msg._OccupancyGrid import OccupancyGrid
 from rospy.client import wait_for_message
+from nav_msgs.srv import *
 
 def myclient(start, goal, map):
     rospy.wait_for_service('Astar_pathfinding')
@@ -20,6 +21,17 @@ def myclient(start, goal, map):
         return stuff.waypoints
     except rospy.ServiceException, e:
         print "Service call failed: %s"%e
+        
+def getmap():
+    global map
+    rospy.wait_for_service('dynamic_map')
+    try:
+        myservice = rospy.ServiceProxy('dynamic_map', GetMap)
+        stuff = myservice()
+        return stuff.map
+    except rospy.ServiceException, e:
+        print "Service call failed: %s"%e
+        return map
         
 #This function accepts a speed and a distance for the robot to move in a straight line
 def driveStraight(speed, distance):
@@ -66,12 +78,14 @@ def driveStraight(speed, distance):
         rospy.sleep(rospy.Duration(0, 1000000))
     
     #and then stop moving
-    twist.linear.x = 0
-    twist.linear.y = 0
-    twist.linear.z = 0
-    twist.angular.x = 0
-    twist.angular.y = 0
-    twist.angular.z = 0
+    #===========================================================================
+    # twist.linear.x = 0
+    # twist.linear.y = 0
+    # twist.linear.z = 0
+    # twist.angular.x = 0
+    # twist.angular.y = 0
+    # twist.angular.z = 0
+    #===========================================================================
     #pub.publish(twist)
     
 #Accepts an angle and makes the robot rotate around it.
@@ -133,7 +147,7 @@ def rotate(angle):
             twist.angular.z = -(1.0 - (ratio - 0.7)*13.3/3.0) * sign(distance)
         else:
             twist.angular.z = sign(distance)
-            
+        
         #if twist.angular.z < .05:
             #twist.angular.z = .05
         pub.publish(twist)
@@ -142,12 +156,14 @@ def rotate(angle):
         rospy.sleep(rospy.Duration(0, 1000000))
     
     #and then stop moving
-    twist.linear.x = 0
-    twist.linear.y = 0
-    twist.linear.z = 0
-    twist.angular.x = 0
-    twist.angular.y = 0
-    twist.angular.z = 0
+    #===========================================================================
+    # twist.linear.x = 0
+    # twist.linear.y = 0
+    # twist.linear.z = 0
+    # twist.angular.x = 0
+    # twist.angular.y = 0
+    # twist.angular.z = 0
+    #===========================================================================
     #pub.publish(twist)
     
 #Odometry Callback function.
@@ -168,7 +184,7 @@ def read_odometry(msg):
 def expandObstacle(inputMap):
     
     robotRadius = .15
-    expandedObsVal = 1
+    expandedObsVal = 0.2
     newGrid = OccupancyGrid()
     newGrid.data = list(inputMap.data)
     newGrid.header = inputMap.header
@@ -231,9 +247,10 @@ def read_map(msg):
     global newpath
     
     #newpath = True
-    print "received new map"
+    print "asking for a new map"
     #save the most recent map
-    temp_map = msg 
+    temp_map = getmap() 
+    print "got a new map"
     #print map
     map = expandObstacle(temp_map)
 
@@ -245,12 +262,15 @@ def read_map(msg):
     #print "current location is (%s, %s)"%(start.x, start.y)
     if not pathpoints:
         print "unable to reach goal (%s, %s)"%(goal.x, goal.y)
+        
+    print "returning from callback"
     
 
 if __name__ == "__main__":
     
     global pub
     global map_pub
+    global map_sub
     global map
     global goal
     global pathpoints
@@ -277,7 +297,8 @@ if __name__ == "__main__":
         
     rospy.sleep(rospy.Duration(1.0))
     
-    map_sub = rospy.Subscriber('/map', OccupancyGrid, read_map, queue_size=1)
+    rospy.Timer(rospy.Duration(1.0), read_map)
+    #map_sub = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, read_map, queue_size=1)
     map_pub = rospy.Publisher('/map2', OccupancyGrid)
         
     rospy.sleep(rospy.Duration(1.0))
@@ -299,7 +320,7 @@ if __name__ == "__main__":
                 #turn to the correct direction
                 rotate(angle)
                 #then drive the distance
-                driveStraight(0.2, distance)
+                driveStraight(0.1, distance)
                 #save previous
                 (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
                 orientation = atan2(2*(quat[1]*quat[0]+quat[3]*quat[2]),quat[3]**2+quat[0]**2-quat[1]**2-quat[2]**2)
