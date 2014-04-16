@@ -14,6 +14,7 @@ from rospy.client import wait_for_message
 from nav_msgs.srv import *
 
 def myclient(start, goal, map):
+    #calls the A* service
     rospy.wait_for_service('Astar_pathfinding')
     try:
         myservice = rospy.ServiceProxy('Astar_pathfinding', FindPath)
@@ -22,17 +23,19 @@ def myclient(start, goal, map):
     except rospy.ServiceException, e:
         print "Service call failed: %s"%e
         
-def getmap():
-    global map
-    rospy.wait_for_service('dynamic_map')
-    try:
-        myservice = rospy.ServiceProxy('dynamic_map', GetMap)
-        stuff = myservice()
-        return stuff.map
-    except rospy.ServiceException, e:
-        print "Service call failed: %s"%e
-        return map
-        
+#===============================================================================
+# def getmap():
+#     global map
+#     rospy.wait_for_service('dynamic_map')
+#     try:
+#         myservice = rospy.ServiceProxy('dynamic_map', GetMap)
+#         stuff = myservice()
+#         return stuff.map
+#     except rospy.ServiceException, e:
+#         print "Service call failed: %s"%e
+#         return map
+#         
+#===============================================================================
 #This function accepts a speed and a distance for the robot to move in a straight line
 def driveStraight(speed, distance):
     
@@ -50,7 +53,7 @@ def driveStraight(speed, distance):
     twist.angular.y = 0
     twist.angular.z = 0
     #pub.publish(twist)
-    print twist
+    #print twist
     
     #continue until we have traveled the correct distance
     start_position = position
@@ -94,7 +97,8 @@ def rotate(angle):
     global pub
     global position
     global orientation
-    
+    global rotating
+    rotating = True
     #publish message to rotate in the correct direction
     twist = Twist()
     twist.linear.x = 0
@@ -104,7 +108,7 @@ def rotate(angle):
     twist.angular.y = 0
     twist.angular.z = -sign(angle/180.0*pi - orientation)
     #pub.publish(twist)
-    print twist
+    #print twist
     
     start_orientation = orientation
     
@@ -120,7 +124,7 @@ def rotate(angle):
     offset = 0
     
     #continue until we are in the correct orientation 
-    while abs(orientation - desired_orientation) > .05 and not newpath:
+    while abs(orientation - desired_orientation) > .1:
         
         #in case it went around -pi -> +pi
         if orientation > 0 and start_orientation < 0:
@@ -146,7 +150,15 @@ def rotate(angle):
         elif ratio > .7:
             twist.angular.z = -(1.0 - (ratio - 0.7)*13.3/3.0) * sign(distance)
         else:
-            twist.angular.z = sign(distance)
+            #twist.angular.z = -1#sign(distance)
+            if orientation > desired_orientation:
+                twist.angular.z = -1
+                #print "rotate left"
+                #print desired_orientation
+            else:
+                twist.angular.z = 1
+                #print "rotate right"
+                #print desired_orientation
         
         #if twist.angular.z < .05:
             #twist.angular.z = .05
@@ -155,6 +167,7 @@ def rotate(angle):
         orientation = atan2(2*(quat[1]*quat[0]+quat[3]*quat[2]),quat[3]**2+quat[0]**2-quat[1]**2-quat[2]**2)
         rospy.sleep(rospy.Duration(0, 1000000))
     
+    rotating = False
     #and then stop moving
     #===========================================================================
     # twist.linear.x = 0
@@ -183,8 +196,8 @@ def read_odometry(msg):
 
 def expandObstacle(inputMap):
     
-    robotRadius = .15
-    expandedObsVal = 0.2
+    robotRadius = .07#amount to expand obstacles by
+    expandedObsVal = 0.2#how sure we are that things near obstacles are also obstacles
     newGrid = OccupancyGrid()
     newGrid.data = list(inputMap.data)
     newGrid.header = inputMap.header
@@ -245,11 +258,13 @@ def read_map(msg):
     global goal
     global pathpoints
     global newpath
-    
+    global rotating
+
     #newpath = True
-    print "asking for a new map"
+    #print "asking for a new map"
     #save the most recent map
-    temp_map = getmap() 
+    #temp_map = getmap() 
+    temp_map = msg
     print "got a new map"
     #print map
     map = expandObstacle(temp_map)
@@ -262,6 +277,12 @@ def read_map(msg):
     #print "current location is (%s, %s)"%(start.x, start.y)
     if not pathpoints:
         print "unable to reach goal (%s, %s)"%(goal.x, goal.y)
+        
+    while rotating:
+        rospy.sleep(rospy.Duration(0.05))
+     
+    #wiat a bit so we aren't just constantly replanning   
+    rospy.sleep(rospy.Duration(4.0))
         
     print "returning from callback"
     
@@ -276,6 +297,8 @@ if __name__ == "__main__":
     global pathpoints
     global newpath
     global position
+    global rotating
+    rotating = False
     
     rospy.init_node('barth_sorrells_wu_lab4_node')
     
@@ -297,8 +320,8 @@ if __name__ == "__main__":
         
     rospy.sleep(rospy.Duration(1.0))
     
-    rospy.Timer(rospy.Duration(1.0), read_map)
-    #map_sub = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, read_map, queue_size=1)
+    #rospy.Timer(rospy.Duration(1.0), read_map)
+    map_sub = rospy.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid, read_map, queue_size=1)
     map_pub = rospy.Publisher('/map2', OccupancyGrid)
         
     rospy.sleep(rospy.Duration(1.0))
@@ -306,17 +329,17 @@ if __name__ == "__main__":
     #print "Requesting path to (%s,%s)"%(goal.x, goal.y)
     
     newpath = False    
-    while True:
+    while not rospy.is_shutdown():
         (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
         orientation = atan2(2*(quat[1]*quat[0]+quat[3]*quat[2]),quat[3]**2+quat[0]**2-quat[1]**2-quat[2]**2)
         
         j = Point(position[0],position[1],0)
-        if pathpoints:
-            for i in xrange(len(pathpoints)):
+        if pathpoints and len(pathpoints) > 0:
+            for i in xrange(1,len(pathpoints)):
                 distance = ((pathpoints[i].x-j.x)**2+(pathpoints[i].y-j.y)**2)**.5
                 angle = atan2(pathpoints[i].y - j.y, pathpoints[i].x - j.x)*180.0/pi
-                print "driving from (%s,%s) to (%s,%s)"%(j.x,j.y,pathpoints[i].x,pathpoints[i].y)
-                print "turning to angle %s degrees, then driving %s meters"%(angle, distance)
+                #print "driving from (%s,%s) to (%s,%s)"%(j.x,j.y,pathpoints[i].x,pathpoints[i].y)
+                #print "turning to angle %s degrees, then driving %s meters"%(angle, distance)
                 #turn to the correct direction
                 rotate(angle)
                 #then drive the distance
@@ -328,6 +351,11 @@ if __name__ == "__main__":
                 
                 if newpath:
                     break
+        else:
+            print "spinning"
+            rotate(orientation*180.0/pi+90)
+            print "done spinning"
+            print newpath
         while newpath == False:
             pass
         newpath = False
