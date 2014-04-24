@@ -8,13 +8,7 @@ from geometry_msgs.msg._Point import Point
 from geometry_msgs.msg._PoseWithCovarianceStamped import PoseWithCovarianceStamped
 from numpy import sign, ndarray
 from visualization_msgs.msg._Marker import Marker
-from beginner_tutorials.srv import *
 from lab3.srv import *
-
-#TODO
-#make launch file to start map_server and this and rviz at the same time
-#somehow make rviz's grid line up with the map (its working now??)
-#send robot model to rviz
 
 class point:
     def __init__(self, x1, y1, Parent, Cost):
@@ -53,17 +47,20 @@ class point:
         
         tempPoint = point(self.x, self.y, self.parent, self.cost)
         arrayTravelled.remove(self)
+        
+        #keep getting the parent until we end up at the start cell
         while tempPoint.x != start.x or tempPoint.y != start.y:
             result.append(tempPoint)
             tempPoint = tempPoint.parent
             arrayTravelled.remove(tempPoint)
         result.append(tempPoint)
         displayPath(result)
+        #calculate the waypoints along this path
         waypoints = pathWaypoints(result)
         displayWaypoints(waypoints)
         return waypoints
     
-
+#this converts the 1d array into a 2d array
 def createArray(inputPoints):
     global matrixPoints
     
@@ -87,6 +84,7 @@ def Astar_srv(req):
     
     map_pub.publish(map)
     
+    #convert from position to cell
     start.x = int((start.x - map.info.origin.position.x) / map.info.resolution) - map.info.width
     start.y = int((-start.y + map.info.origin.position.y) / map.info.resolution)
     goal.x = int((goal.x - map.info.origin.position.x) / map.info.resolution) - map.info.width
@@ -102,11 +100,13 @@ def Astar_srv(req):
         displayProgress(arrayTravelled, arrayFrontier)
         result = []
         for i in waypoints:
+            #convert from cell to position
             result.append(Point((i.x+map.info.width)*map.info.resolution + map.info.origin.position.x, 
                                 -((i.y)*map.info.resolution - map.info.origin.position.y), 
                                 0))
         return FindPathResponse(result)
     else:
+        #return nothing on failure
         pass
     
     
@@ -122,7 +122,7 @@ def aStar(startnode):
     arrayFrontier = [startnode]
     createArray(map.data)
     
-    freeSpaceValue = 50
+    defaultFreeSpaceValue = 50
     maxloops = 1000
     
     while len(arrayFrontier) != 0 and maxloops > 0:
@@ -133,6 +133,14 @@ def aStar(startnode):
     
         x1 = node.x
         y1 = node.y
+        
+        #check if the point we're on is a obstacle
+        if matrixPoints[x1][y1] >= freeSpaceValue:
+            #if inside an obstacle, allow any cell that is less obstacley
+            freeSpaceValue = matrixPoints[x1][y1]
+        else:
+            #otherwise, avoid all obstacles
+            freeSpaceValue = defaultFreeSpaceValue
         
         #add point to travelled
         arrayTravelled.append(node)
@@ -430,7 +438,7 @@ if __name__ == '__main__':
     goal = Point(10,30,0)
     
     # Change this node name to include your username
-    rospy.init_node('Barth_Sorrells_Wu_Lab_3_node')
+    rospy.init_node('Barth_Sorrells_Wu_Astar_server')
     
     #publishers
     path_pub = rospy.Publisher('/lab3/pathcells', GridCells)
@@ -450,11 +458,11 @@ if __name__ == '__main__':
     # Use this command to make the program wait for some seconds
     rospy.sleep(rospy.Duration(1, 0))
     
-    print "starting lab 3"
+    print "starting A* server"
     
     # wait for events
     rospy.spin()
     
-    print "\nending lab 3"
+    print "\nending A* server"
 
 
