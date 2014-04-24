@@ -135,9 +135,9 @@ def aStar(startnode):
         y1 = node.y
         
         #check if the point we're on is a obstacle
-        if matrixPoints[x1][y1] >= freeSpaceValue:
+        if matrixPoints[x1][y1] >= defaultFreeSpaceValue:
             #if inside an obstacle, allow any cell that is less obstacley
-            freeSpaceValue = matrixPoints[x1][y1]
+            freeSpaceValue = matrixPoints[x1][y1]+1
         else:
             #otherwise, avoid all obstacles
             freeSpaceValue = defaultFreeSpaceValue

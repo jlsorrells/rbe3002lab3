@@ -196,38 +196,54 @@ def read_odometry(msg):
 
 def combineMaps(localMap, globalMap):
         
+    print "combining maps"
+    
     localMapWidth = localMap.info.width
     globalMapWidth = globalMap.info.width
     newGrid = OccupancyGrid()
+    newGrid.header = globalMap.header
+    newGrid.info = globalMap.info
+    newGrid.data = globalMap.data
     #set n location
-    n
-    
+    start = Point(position[0], position[1], 0)
+    start.x = -(int((start.x - globalMap.info.origin.position.x) / globalMap.info.resolution) - globalMap.info.width)
+    start.y = -int((-start.y + globalMap.info.origin.position.y) / globalMap.info.resolution)
+    n = start.y * globalMapWidth + start.x
+    print "x,y = %s,%s"%(start.x,start.y)
     #calculate upper bound
-    if len(globalMap) - n <= localMapWidth * localMapWidth/2
-        U = trunc(len(globalMap) -n -1/localMapWidth)
-    else U = localMapWidth/2
+    if len(globalMap.data) - n <= globalMapWidth * localMapWidth/2:
+        U = trunc((len(globalMap.data) -n -1)/globalMapWidth)
+    else:
+        U = localMapWidth/2
     #calculate left bound
-    if n%globalMapWidth < localMapWidth/2
+    if n%globalMapWidth < localMapWidth/2:
         L = n%globalMapWidth
-    else L = localMapWidth/2
+    else:
+        L = localMapWidth/2
     #calculate right bound
-    if globalMapWidth - n%globalMapWidth < localMapWidth/2
+    if globalMapWidth - n%globalMapWidth < localMapWidth/2:
         R = globalMapWidth - n%globalMapWidth
-    else R = localMapWidth/2    
+    else:
+        R = localMapWidth/2
     #calculate lower bound
-    if n <= localMapWidth * localMapWidth/2
+    print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
+    if n/globalMapWidth < localMapWidth/2:
         D = trunc(n/globalMapWidth)
-    else D = localMapWidth/2
+    else:
+        D = localMapWidth/2
     
     n2 = 0
     n3 = 0
-        
+    
+    print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
+       
     for n2 in range(int(U+D+1)):
         for n3 in range(int(L+R+1)):
             tempGLoc = int(n + globalMapWidth * (n2 - U) + (n3 - L))
-            tempLLoc = int((LocalMapWidth/2-L) + n3 + (L+R+1)*n2)
-            if newGrid.data[tempGLoc] < localMap.data[tempLLoc]
-                newGrid.data[tempGLoc] = localMap.data[tempLLoc]
+            tempLLoc = int((localMapWidth/2-L) + n3 + (L+R+1)*n2)
+            #if newGrid.data[tempGLoc] < localMap.data[tempLLoc]:
+            print "tempG,tempL = %s,%s"%(tempGLoc,tempLLoc)
+            newGrid.data[tempGLoc] = localMap.data[tempLLoc]
 
     return newGrid
 
@@ -297,6 +313,9 @@ def read_map(msg):
     global newpath
     global rotating
 
+    #because apperently it isn't a list already?
+    msg.data = list(msg.data)
+    
     #newpath = True
     #print "asking for a new map"
     #save the most recent map
@@ -304,6 +323,9 @@ def read_map(msg):
     temp_map = msg
     print "got a new map"
     #print map
+    if map == 0:
+        map = msg
+        
     map = combineMaps(expandObstacle(temp_map), map)
 
     mapresolution = map.info.resolution
@@ -340,6 +362,7 @@ if __name__ == "__main__":
     global position
     global rotating
     rotating = False
+    map = 0
     
     rospy.init_node('barth_sorrells_wu_lab4_node')
     
