@@ -194,6 +194,43 @@ def read_odometry(msg):
     #angles are confusing
     orientation = atan2(2*(quat.y*quat.x+quat.w*quat.z),quat.w**2+quat.x**2-quat.y**2-quat.z**2)
 
+def combineMaps(localMap, globalMap):
+        
+    localMapWidth = localMap.info.width
+    globalMapWidth = globalMap.info.width
+    newGrid = OccupancyGrid()
+    #set n location
+    n
+    
+    #calculate upper bound
+    if len(globalMap) - n <= localMapWidth * localMapWidth/2
+        U = trunc(len(globalMap) -n -1/localMapWidth)
+    else U = localMapWidth/2
+    #calculate left bound
+    if n%globalMapWidth < localMapWidth/2
+        L = n%globalMapWidth
+    else L = localMapWidth/2
+    #calculate right bound
+    if globalMapWidth - n%globalMapWidth < localMapWidth/2
+        R = globalMapWidth - n%globalMapWidth
+    else R = localMapWidth/2    
+    #calculate lower bound
+    if n <= localMapWidth * localMapWidth/2
+        D = trunc(n/globalMapWidth)
+    else D = localMapWidth/2
+    
+    n2 = 0
+    n3 = 0
+        
+    for n2 in range(int(U+D+1)):
+        for n3 in range(int(L+R+1)):
+            tempGLoc = int(n + globalMapWidth * (n2 - U) + (n3 - L))
+            tempLLoc = int((LocalMapWidth/2-L) + n3 + (L+R+1)*n2)
+            if newGrid.data[tempGLoc] < localMap.data[tempLLoc]
+                newGrid.data[tempGLoc] = localMap.data[tempLLoc]
+
+    return newGrid
+
 def expandObstacle(inputMap):
     
     robotRadius = .07#amount to expand obstacles by
@@ -267,7 +304,7 @@ def read_map(msg):
     temp_map = msg
     print "got a new map"
     #print map
-    map = expandObstacle(temp_map)
+    map = combineMaps(expandObstacle(temp_map), map)
 
     mapresolution = map.info.resolution
     start = Point(position[0], position[1], 0)
@@ -285,6 +322,10 @@ def read_map(msg):
     rospy.sleep(rospy.Duration(4.0))
         
     print "returning from callback"
+    
+def read_global_map(msg):
+    global map
+    map = expandObstacle(msg)
     
 
 if __name__ == "__main__":
@@ -322,6 +363,7 @@ if __name__ == "__main__":
     
     #rospy.Timer(rospy.Duration(1.0), read_map)
     map_sub = rospy.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid, read_map, queue_size=1)
+    map_sub2 = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, read_global_map, queue_size=1)
     map_pub = rospy.Publisher('/map2', OccupancyGrid)
         
     rospy.sleep(rospy.Duration(1.0))
