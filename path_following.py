@@ -194,6 +194,68 @@ def read_odometry(msg):
     #angles are confusing
     orientation = atan2(2*(quat.y*quat.x+quat.w*quat.z),quat.w**2+quat.x**2-quat.y**2-quat.z**2)
 
+
+def combineMaps2(localMap, globalMap):
+        
+    print "combining maps"
+    
+    localMapWidth = localMap.info.width
+    globalMapWidth = globalMap.info.width
+    newGrid = OccupancyGrid()
+    newGrid.header = globalMap.header
+    newGrid.info = globalMap.info
+    newGrid.data = globalMap.data
+    #set n location
+    start = Point(position[0], position[1], 0)
+    start.x = -(int((start.x - globalMap.info.origin.position.x) / globalMap.info.resolution) - globalMap.info.width)
+    start.y = -int((-start.y + globalMap.info.origin.position.y) / globalMap.info.resolution)
+	if localMap.info.origin.position.x < globalMap.info.origin.position.x
+		tempX = 0
+	else
+		tempX = localMap.info.origin.position.x - globalMap.info.origin.position.x
+	if localMap.info.origin.position.y < globalMap.info.origin.position.y
+		tempY = 0
+	else
+		tempY = localMap.info.origin.position.x - globalMap.info.origin.position.x
+    n = tempY * globalMapWidth + tempX
+    print "x,y = %s,%s"%(start.x,start.y)
+    #calculate upper bound
+    if localMap.info.origin.position.y + localMapWidth > globalMap.info.origin.position.y + globalMapWidth:
+        U = localMap.info.origin.position.y + localMapWidth - globalMap.info.origin.position.y - globalMapWidth
+    else:
+        U = 0
+    #calculate left bound
+    if localMap.info.origin.position.x < globalMap.info.origin.position.x
+        L = globalMap.info.origin.position.x - localMap.info.origin.position.x
+    else:
+        L = 0
+    #calculate right bound
+    if localMap.info.origin.position.x + localMapWidth > globalMap.info.origin.position.x + globalMapWidth
+        R = localMap.info.origin.position.x + localMapWidth - globalMap.info.origin.position.x - globalMapWidth
+    else:
+        R = 0
+    #calculate lower bound
+    print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
+    if localMap.info.origin.position.y < globalMap.info.origin.position.y
+        D = globalMap.info.origin.position.y - localMap.info.origin.position.y
+    else:
+        D = 0
+    
+    n2 = 0
+    n3 = 0
+    
+    print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
+       
+    for n2 in range(localMapWidth - U - D):
+        for n3 in range(localMapWidth - L - R):
+            tempGLoc = n + L + n2*globalMapWidth + n3
+            tempLLoc = L + n2*localMapWidth + n3
+            #if newGrid.data[tempGLoc] < localMap.data[tempLLoc]:
+            print "tempG,tempL = %s,%s"%(tempGLoc,tempLLoc)
+            newGrid.data[tempGLoc] = localMap.data[tempLLoc]
+
+    return newGrid
+
 def combineMaps(localMap, globalMap):
         
     print "combining maps"
