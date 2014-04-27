@@ -23,19 +23,17 @@ def myclient(start, goal, map):
     except rospy.ServiceException, e:
         print "Service call failed: %s"%e
         
-#===============================================================================
-# def getmap():
-#     global map
-#     rospy.wait_for_service('dynamic_map')
-#     try:
-#         myservice = rospy.ServiceProxy('dynamic_map', GetMap)
-#         stuff = myservice()
-#         return stuff.map
-#     except rospy.ServiceException, e:
-#         print "Service call failed: %s"%e
-#         return map
-#         
-#===============================================================================
+def getmap():
+     global map
+     rospy.wait_for_service('dynamic_map')
+     try:
+         myservice = rospy.ServiceProxy('dynamic_map', GetMap)
+         stuff = myservice()
+         return stuff.map
+     except rospy.ServiceException, e:
+         print "Service call failed: %s"%e
+         return map
+         
 #This function accepts a speed and a distance for the robot to move in a straight line
 def driveStraight(speed, distance):
     
@@ -194,6 +192,78 @@ def read_odometry(msg):
     #angles are confusing
     orientation = atan2(2*(quat.y*quat.x+quat.w*quat.z),quat.w**2+quat.x**2-quat.y**2-quat.z**2)
 
+
+def combineMaps2(localMap, globalMap):
+        
+    print "combining maps"
+    
+    localMapWidth = localMap.info.width
+    globalMapWidth = globalMap.info.width
+    newGrid = OccupancyGrid()
+    newGrid.header = globalMap.header
+    newGrid.info = globalMap.info
+    newGrid.data = globalMap.data
+    
+    #localMap.info.origin.position.y += localMapWidth * localMap.info.resolution / 2
+    
+    #set n location
+    if localMap.info.origin.position.x < globalMap.info.origin.position.x:
+        tempX = 0
+    else:
+        tempX = (localMap.info.origin.position.x - globalMap.info.origin.position.x)/globalMap.info.resolution
+    if localMap.info.origin.position.y < globalMap.info.origin.position.y:
+        tempY = 0
+    else:
+        tempY = (localMap.info.origin.position.y - globalMap.info.origin.position.y)/globalMap.info.resolution
+        
+    n = tempY * globalMapWidth + tempX
+    print "x,y = %s,%s"%(tempX,tempY)
+    #calculate upper bound
+    if localMap.info.origin.position.y + localMapWidth*localMap.info.resolution > globalMap.info.origin.position.y + globalMapWidth*globalMap.info.resolution:
+        U = localMap.info.origin.position.y/localMap.info.resolution + localMapWidth - globalMap.info.origin.position.y/globalMap.info.resolution - globalMapWidth
+    else:
+        U = 0
+    #calculate left bound
+    if localMap.info.origin.position.x < globalMap.info.origin.position.x:
+        L = globalMap.info.origin.position.x/globalMap.info.resolution - localMap.info.origin.position.x/localMap.info.resolution
+    else:
+        L = 0
+    #calculate right bound
+    if localMap.info.origin.position.x + localMapWidth*localMap.info.resolution > globalMap.info.origin.position.x + globalMapWidth*globalMap.info.resolution:
+        R = localMap.info.origin.position.x/localMap.info.resolution + localMapWidth - globalMap.info.origin.position.x/globalMap.info.resolution - globalMapWidth
+    else:
+        R = 0
+    #calculate lower bound
+    print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
+    if localMap.info.origin.position.y < globalMap.info.origin.position.y:
+        D = globalMap.info.origin.position.y/globalMap.info.resolution - localMap.info.origin.position.y/localMap.info.resolution
+    else:
+        D = 0
+    
+    n2 = 0
+    n3 = 0
+    
+    #make stuff ints
+    #round to nearest number
+    n = int(n+0.5)
+    U = int(U+0.5)
+    L = int(L+0.5)
+    R = int(R+0.5)
+    D = int(D+0.5)
+    
+    print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
+       
+    for n2 in range(localMapWidth - U - D):
+        for n3 in range(localMapWidth - L - R):
+            tempGLoc = n + n2*globalMapWidth + n3
+            tempLLoc = L + n2*localMapWidth + n3 + D * localMapWidth
+            #if newGrid.data[tempGLoc] < localMap.data[tempLLoc]:
+            #print "tempG,tempL = %s,%s"%(tempGLoc,tempLLoc)
+            newGrid.data[tempGLoc] = localMap.data[tempLLoc]
+
+    return newGrid
+
+
 def combineMaps(localMap, globalMap):
         
     print "combining maps"
@@ -204,8 +274,12 @@ def combineMaps(localMap, globalMap):
     newGrid.header = globalMap.header
     newGrid.info = globalMap.info
     newGrid.data = globalMap.data
+    
     #set n location
-    start = Point(position[0], position[1], 0)
+    start = localMap.info.origin.position
+    start.x += (localMap.info.width / 2 + 1)* localMap.info.resolution
+    start.y += localMap.info.height / 2 * localMap.info.resolution
+    
     start.x = -(int((start.x - globalMap.info.origin.position.x) / globalMap.info.resolution) - globalMap.info.width)
     start.y = -int((-start.y + globalMap.info.origin.position.y) / globalMap.info.resolution)
     n = start.y * globalMapWidth + start.x
@@ -224,13 +298,13 @@ def combineMaps(localMap, globalMap):
     if globalMapWidth - n%globalMapWidth < localMapWidth/2:
         R = globalMapWidth - n%globalMapWidth
     else:
-        R = localMapWidth/2
+        R = localMapWidth/2-1
     #calculate lower bound
     print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
     if n/globalMapWidth < localMapWidth/2:
         D = trunc(n/globalMapWidth)
     else:
-        D = localMapWidth/2
+        D = localMapWidth/2-1
     
     n2 = 0
     n3 = 0
@@ -243,6 +317,9 @@ def combineMaps(localMap, globalMap):
             tempLLoc = int((localMapWidth/2-L) + n3 + (L+R+1)*n2)
             #if newGrid.data[tempGLoc] < localMap.data[tempLLoc]:
             print "tempG,tempL = %s,%s"%(tempGLoc,tempLLoc)
+            print "size of local map = %s"%(len(localMap.data))
+            print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
+            print "\n"
             newGrid.data[tempGLoc] = localMap.data[tempLLoc]
 
     return newGrid
@@ -319,14 +396,21 @@ def read_map(msg):
     #newpath = True
     #print "asking for a new map"
     #save the most recent map
-    #temp_map = getmap() 
+    
     temp_map = msg
     print "got a new map"
     #print map
     if map == 0:
+        #=======================================================================
+        # print "requesting global map from gmapping"
+        # map = getmap() 
+        # print "finally got a global map from gmapping"
+        #=======================================================================
         map = msg
+        map.info.height = 79
+        map.info.width = 79
         
-    map = combineMaps(expandObstacle(temp_map), map)
+    map = combineMaps2(expandObstacle(temp_map), map)
 
     mapresolution = map.info.resolution
     start = Point(position[0], position[1], 0)
@@ -363,6 +447,29 @@ if __name__ == "__main__":
     global rotating
     rotating = False
     map = 0
+    
+    #===========================================================================
+    # test1 = OccupancyGrid()
+    # test1.data = range(16)
+    # test1.info.width = 4
+    # test1.info.height = 4
+    # test1.info.resolution = 0.2
+    # test1.info.origin.position = Point(2,2,0)
+    # test2 = OccupancyGrid()
+    # test2.data = range(25)
+    # test2.info.width = 5
+    # test2.info.height = 5
+    # test2.info.resolution = 0.2
+    # test2.info.origin.position = Point(0,0,0)
+    # 
+    # map = combineMaps2(test1, test2)
+    # print map
+    # print map.data[20:25]
+    # print map.data[15:20]
+    # print map.data[10:15]
+    # print map.data[5:10]
+    # print map.data[0:5]
+    #===========================================================================
     
     rospy.init_node('barth_sorrells_wu_lab4_node')
     
@@ -419,10 +526,11 @@ if __name__ == "__main__":
         else:
             print "spinning"
             rotate(orientation*180.0/pi+90)
-            print "done spinning"
+            #print "done spinning"
             print newpath
         while newpath == False:
-            pass
+            print "spinning"
+            rotate(orientation*180.0/pi+90)
         newpath = False
     
     
