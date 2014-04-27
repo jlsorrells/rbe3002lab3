@@ -12,6 +12,8 @@ from numpy import sign
 from nav_msgs.msg._OccupancyGrid import OccupancyGrid
 from rospy.client import wait_for_message
 from nav_msgs.srv import *
+from numpy.matlib import rand
+import random
 
 def myclient(start, goal, map):
     #calls the A* service
@@ -407,8 +409,8 @@ def read_map(msg):
         # print "finally got a global map from gmapping"
         #=======================================================================
         map = msg
-        map.info.height = 79
-        map.info.width = 79
+        map.info.height = 80
+        map.info.width = 80
         
     map = combineMaps2(expandObstacle(temp_map), map)
 
@@ -420,9 +422,13 @@ def read_map(msg):
     #print "current location is (%s, %s)"%(start.x, start.y)
     if not pathpoints:
         print "unable to reach goal (%s, %s)"%(goal.x, goal.y)
+        goal = Point(position[0] + random.randrange(-20,20,1)/10.0, position[1] + random.randrange(-20,20,1)/10.0,0)
         
-    while rotating:
-        rospy.sleep(rospy.Duration(0.05))
+        
+    #===========================================================================
+    # while rotating:
+    #     rospy.sleep(rospy.Duration(0.05))
+    #===========================================================================
      
     #wiat a bit so we aren't just constantly replanning   
     rospy.sleep(rospy.Duration(4.0))
@@ -523,12 +529,14 @@ if __name__ == "__main__":
                 
                 if newpath:
                     break
+            if abs(position[0] - goal.x) < .2 and abs(position[1] - goal.y) < .2:
+                goal = Point(position[0] + random.randrange(-20,20,1)/10.0, position[1] + random.randrange(-20,20,1)/10.0,0)
         else:
             print "spinning"
             rotate(orientation*180.0/pi+90)
             #print "done spinning"
             print newpath
-        while newpath == False:
+        while newpath == False and not rospy.is_shutdown():
             print "spinning"
             rotate(orientation*180.0/pi+90)
         newpath = False
