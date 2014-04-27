@@ -233,10 +233,12 @@ def combineMaps2(localMap, globalMap):
     #calculate right bound
     if localMap.info.origin.position.x + localMapWidth*localMap.info.resolution > globalMap.info.origin.position.x + globalMapWidth*globalMap.info.resolution:
         R = localMap.info.origin.position.x/localMap.info.resolution + localMapWidth - globalMap.info.origin.position.x/globalMap.info.resolution - globalMapWidth
+
     else:
         R = 0
     #calculate lower bound
     print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
+
     if localMap.info.origin.position.y < globalMap.info.origin.position.y:
         D = globalMap.info.origin.position.y/globalMap.info.resolution - localMap.info.origin.position.y/localMap.info.resolution
     else:
@@ -264,7 +266,6 @@ def combineMaps2(localMap, globalMap):
             newGrid.data[tempGLoc] = localMap.data[tempLLoc]
 
     return newGrid
-
 
 def combineMaps(localMap, globalMap):
         
