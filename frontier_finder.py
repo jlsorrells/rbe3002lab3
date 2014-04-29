@@ -78,9 +78,9 @@ if __name__ == "__main__":
     rospy.init_node("Barth_Sorrells_wu_frontier_cell_finder")
     
     #publish goals
-    goal_pub = map_pub = rospy.Publisher('/final_project/goals', GridCells)
+    goal_pub = rospy.Publisher('/final_project/goals', GridCells)
     
-    #subscribe to the global costmap
+    #subscribe to the map
     #map_sub = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, read_map, queue_size=1)
     map_sub = rospy.Subscriber('/map', OccupancyGrid, read_map, queue_size=1)
     

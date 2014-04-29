@@ -14,6 +14,7 @@ from rospy.client import wait_for_message
 from nav_msgs.srv import *
 from numpy.matlib import rand
 import random
+from nav_msgs.msg._GridCells import GridCells
 
 def myclient(start, goal, map):
     #calls the A* service
@@ -388,7 +389,7 @@ def read_map(msg):
     global arrayTravelled
     global arrayFrontier
     global position
-    global goal
+    global goals
     global pathpoints
     global newpath
     global rotating
@@ -418,13 +419,12 @@ def read_map(msg):
     mapresolution = map.info.resolution
     start = Point(position[0], position[1], 0)
     
-    pathpoints, newpath = myclient(start, goal, map), True
+    pathpoints, newpath = myclient(start, goals[0], map), True
 
     #print "current location is (%s, %s)"%(start.x, start.y)
     if not pathpoints:
-        print "unable to reach goal (%s, %s)"%(goal.x, goal.y)
-        goal = Point(position[0] + random.randrange(-20,20,1)/10.0, position[1] + random.randrange(-20,20,1)/10.0,0)
-        
+        print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
+        set_next_goal()
         
     #===========================================================================
     # while rotating:
@@ -440,14 +440,44 @@ def read_global_map(msg):
     global map
     map = expandObstacle(msg)
     
+def read_new_goals(msg):
+    global goals
+    
+    #get the list of positions
+    temp = msg.cells
+    
+    #sort by closeness to robot
+    (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
+    temp.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
+    
+    #save in global variable
+    goals = temp
+    
+def set_next_goal():
+    global goals
+    
+    #go to the next goal
+    
+    if len(goals) <= 1:
+        #do nothing if no more goals
+        return
+    
+    #remove the top goal
+    goals.pop(0)
+    
+    #resort list because robot may have moved
+    (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
+    temp.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
+    
 
+    
 if __name__ == "__main__":
     
     global pub
     global map_pub
     global map_sub
     global map
-    global goal
+    global goals
     global pathpoints
     global newpath
     global position
@@ -479,12 +509,16 @@ if __name__ == "__main__":
     #===========================================================================
     
     rospy.init_node('barth_sorrells_wu_lab4_node')
-    
-    if len(sys.argv) == 3:
-        #start = Point(float(sys.argv[1]), float(sys.argv[2]), float(0))
-        goal = Point(float(sys.argv[1]), float(sys.argv[2]), float(0))
-    else:
-        sys.exit(1)
+    #===========================================================================
+    # 
+    # if len(sys.argv) == 3:
+    #     #start = Point(float(sys.argv[1]), float(sys.argv[2]), float(0))
+    #     goal = Point(float(sys.argv[1]), float(sys.argv[2]), float(0))
+    # else:
+    #     sys.exit(1)
+    #===========================================================================
+    goals = []
+    goals.append(Point(0,0,0))
         
     pathpoints = []
     listener = tf.TransformListener()
@@ -502,6 +536,7 @@ if __name__ == "__main__":
     map_sub = rospy.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid, read_map, queue_size=1)
     map_sub2 = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, read_global_map, queue_size=1)
     map_pub = rospy.Publisher('/map2', OccupancyGrid)
+    goal_sub = rospy.Publisher('/final_project/goals', GridCells, read_new_goals, queue_size=1)
         
     rospy.sleep(rospy.Duration(1.0))
     
@@ -530,13 +565,14 @@ if __name__ == "__main__":
                 
                 if newpath:
                     break
-            if abs(position[0] - goal.x) < .2 and abs(position[1] - goal.y) < .2:
-                goal = Point(position[0] + random.randrange(-20,20,1)/10.0, position[1] + random.randrange(-20,20,1)/10.0,0)
+            if abs(position[0] - goals[0].x) < .2 and abs(position[1] - goals[0].y) < .2:
+                #if we're here, go to the next place
+                set_next_goal()
         else:
             print "spinning"
             rotate(orientation*180.0/pi+90)
             #print "done spinning"
-            print newpath
+            #print newpath
         while newpath == False and not rospy.is_shutdown():
             print "spinning"
             rotate(orientation*180.0/pi+90)
