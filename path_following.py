@@ -92,9 +92,51 @@ def driveStraight(speed, distance):
     # twist.angular.z = 0
     #===========================================================================
     #pub.publish(twist)
-    
-#Accepts an angle and makes the robot rotate around it.
+
+#takes in an angle and rotates - version from lab2_solution.py
 def rotate(angle):
+    global odom_list
+    global pose
+
+    #This node was created using Coordinate system transforms and numpy arrays.
+    #The goal is measured in the turtlebot's frame, transformed to the odom.frame 
+    transformer = tf.TransformerROS()	
+    rotation = numpy.array([[math.cos(angle), -math.sin(angle), 0],	#Create goal rotation
+                            [math.sin(angle), math.cos(angle), 0],
+                            [0,          0,          1]])
+
+    #Get transforms for frames
+    odom_list.waitForTransform('odom', 'base_footprint', rospy.Time(0), rospy.Duration(4.0))
+    (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
+    T_o_t = transformer.fromTranslationRotation(trans, rot)
+    R_o_t = T_o_t[0:3,0:3]
+
+    #Setup goal matrix
+    goal_rot = numpy.dot(rotation, R_o_t)
+    goal_o = numpy.array([[goal_rot[0,0], goal_rot[0,1], goal_rot[0,2], T_o_t[0,3]],
+                    [goal_rot[1,0], goal_rot[1,1], goal_rot[1,2], T_o_t[1,3]],
+                    [goal_rot[2,0], goal_rot[2,1], goal_rot[2,2], T_o_t[2,3]],
+                    [0,             0,             0,             1]])
+
+    #Continues creating and matching coordinate transforms.
+    done = False
+    while (not done and not rospy.is_shutdown()):
+        (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
+        state = transformer.fromTranslationRotation(trans, rot)
+        within_tolerance = abs((state - goal_o)) < .1
+        if ( within_tolerance.all() ):
+            spinWheels(0,0,0)
+            done = True
+        else:
+            if (angle > 0):
+                spinWheels(.1,-.1,.1)
+            else:
+                spinWheels(-.1,.1,.1)
+	rospy.sleep(rospy.Duration(0, 500000))
+
+
+#Accepts an angle and makes the robot rotate around it.
+def rotate2(angle):
     
     global pub
     global position
