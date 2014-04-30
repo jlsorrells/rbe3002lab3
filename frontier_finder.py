@@ -70,7 +70,7 @@ def read_map(msg):
     result.cell_height = mapResolution
     result.cell_width = mapResolution
     goal_pub.publish(result)   
-    print result
+    #print result
 
 if __name__ == "__main__":
     global goal_pub

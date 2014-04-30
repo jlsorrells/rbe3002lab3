@@ -15,6 +15,7 @@ from nav_msgs.srv import *
 from numpy.matlib import rand
 import random
 from nav_msgs.msg._GridCells import GridCells
+from random import randint
 
 def myclient(start, goal, map):
     #calls the A* service
@@ -198,7 +199,7 @@ def read_odometry(msg):
 
 def combineMaps2(localMap, globalMap):
         
-    print "combining maps"
+    #print "combining maps"
     
     localMapWidth = localMap.info.width
     globalMapWidth = globalMap.info.width
@@ -220,7 +221,7 @@ def combineMaps2(localMap, globalMap):
         tempY = (localMap.info.origin.position.y - globalMap.info.origin.position.y)/globalMap.info.resolution
         
     n = tempY * globalMapWidth + tempX
-    print "x,y = %s,%s"%(tempX,tempY)
+    #print "x,y = %s,%s"%(tempX,tempY)
     #calculate upper bound
     if localMap.info.origin.position.y + localMapWidth*localMap.info.resolution > globalMap.info.origin.position.y + globalMapWidth*globalMap.info.resolution:
         U = localMap.info.origin.position.y/localMap.info.resolution + localMapWidth - globalMap.info.origin.position.y/globalMap.info.resolution - globalMapWidth
@@ -238,7 +239,7 @@ def combineMaps2(localMap, globalMap):
     else:
         R = 0
     #calculate lower bound
-    print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
+    #print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
 
     if localMap.info.origin.position.y < globalMap.info.origin.position.y:
         D = globalMap.info.origin.position.y/globalMap.info.resolution - localMap.info.origin.position.y/localMap.info.resolution
@@ -256,7 +257,7 @@ def combineMaps2(localMap, globalMap):
     R = int(R+0.5)
     D = int(D+0.5)
     
-    print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
+    #print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
        
     for n2 in range(localMapWidth - U - D):
         for n3 in range(localMapWidth - L - R):
@@ -330,8 +331,8 @@ def combineMaps(localMap, globalMap):
 
 def expandObstacle(inputMap):
     
-    robotRadius = .07#amount to expand obstacles by
-    expandedObsVal = 0.2#how sure we are that things near obstacles are also obstacles
+    robotRadius = .3#amount to expand obstacles by
+    expandedObsVal = 0.3#how sure we are that things near obstacles are also obstacles
     newGrid = OccupancyGrid()
     newGrid.data = list(inputMap.data)
     newGrid.header = inputMap.header
@@ -341,7 +342,7 @@ def expandObstacle(inputMap):
     gridWidth = newGrid.info.width
     
     n = 0
-    print "expanding obstacles"
+    #print "expanding obstacles"
     numExpansions = ceil(robotRadius/gridResolution)
     
     for n in range(len(inputArray)):
@@ -402,7 +403,7 @@ def read_map(msg):
     #save the most recent map
     
     temp_map = msg
-    print "got a new map"
+    #print "got a new map"
     #print map
     if map == 0:
         #=======================================================================
@@ -434,7 +435,7 @@ def read_map(msg):
     #wiat a bit so we aren't just constantly replanning   
     rospy.sleep(rospy.Duration(4.0))
         
-    print "returning from callback"
+    #print "returning from callback"
     
 def read_global_map(msg):
     global map
@@ -450,25 +451,45 @@ def read_new_goals(msg):
     (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
     temp.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
     
-    #save in global variable
-    goals = temp
+    #save in global variable if we're done with the current goals
+    if len(goals) <= 1:
+        goals = temp
+        
+    print "got new goals"
+    print goals
     
 def set_next_goal():
     global goals
     
-    #go to the next goal
-    
+    (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
+        
     if len(goals) <= 1:
         #do nothing if no more goals
+        print "out of goals, moving randomly"
+        goals[0] = Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0)
+        print goals
         return
     
     #remove the top goal
     goals.pop(0)
+    goals.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
+
     
+    if set_next_goal.start == 0:
+        set_next_goal.start = rospy.get_time()
+    
+    if (rospy.get_time() - set_next_goal.start) < 5*60:
+        goals = []
+        print "early, using random goals"
+        goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
+    
+    print "moving on to next goal"
+    print goals[0]
+    
+    start = Point(position[0], position[1], 0)
+    pathpoints, newpath = myclient(start, goals[0], map), True
     #resort list because robot may have moved
-    (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
-    temp.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
-    
+set_next_goal.start = 0    
 
     
 if __name__ == "__main__":
@@ -534,9 +555,10 @@ if __name__ == "__main__":
     
     #rospy.Timer(rospy.Duration(1.0), read_map)
     map_sub = rospy.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid, read_map, queue_size=1)
-    map_sub2 = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, read_global_map, queue_size=1)
+    #map_sub2 = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, read_global_map, queue_size=1)
+    map_sub2 = rospy.Subscriber('/map', OccupancyGrid, read_global_map, queue_size=1)
     map_pub = rospy.Publisher('/map2', OccupancyGrid)
-    goal_sub = rospy.Publisher('/final_project/goals', GridCells, read_new_goals, queue_size=1)
+    goal_sub = rospy.Subscriber('/final_project/goals', GridCells, read_new_goals, queue_size=1)
         
     rospy.sleep(rospy.Duration(1.0))
     
@@ -557,7 +579,7 @@ if __name__ == "__main__":
                 #turn to the correct direction
                 rotate(angle)
                 #then drive the distance
-                driveStraight(0.1, distance)
+                driveStraight(0.3, distance)
                 #save previous
                 (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
                 orientation = atan2(2*(quat[1]*quat[0]+quat[3]*quat[2]),quat[3]**2+quat[0]**2-quat[1]**2-quat[2]**2)
@@ -566,15 +588,25 @@ if __name__ == "__main__":
                 if newpath:
                     break
             if abs(position[0] - goals[0].x) < .2 and abs(position[1] - goals[0].y) < .2:
-                #if we're here, go to the next place
+                #if we're here, spin around, then go to the next place
+                twist = Twist()
+                twist.linear.x = 0
+                twist.linear.y = 0
+                twist.linear.z = 0
+                twist.angular.x = 0
+                twist.angular.y = 0
+                twist.angular.z = -1
+                for k in range(50):
+                    pub.publish(twist)
+                    rospy.sleep(rospy.Duration(0.1))
                 set_next_goal()
         else:
-            print "spinning"
+            #print "spinning"
             rotate(orientation*180.0/pi+90)
             #print "done spinning"
             #print newpath
         while newpath == False and not rospy.is_shutdown():
-            print "spinning"
+            #print "spinning"
             rotate(orientation*180.0/pi+90)
         newpath = False
     

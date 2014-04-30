@@ -137,7 +137,7 @@ def aStar(startnode):
         #check if the point we're on is a obstacle
         if matrixPoints[x1][y1] >= defaultFreeSpaceValue:
             #if inside an obstacle, allow any cell that is less obstacley
-            freeSpaceValue = matrixPoints[x1][y1]+1
+            freeSpaceValue = matrixPoints[x1][y1]
         else:
             #otherwise, avoid all obstacles
             freeSpaceValue = defaultFreeSpaceValue
@@ -150,30 +150,57 @@ def aStar(startnode):
         if x1 == goal.x and y1 == goal.y:
             return node  
         
+        
+        
         #UL
-        if matrixPoints[x1-1][y1-1]<freeSpaceValue:
-            frontierAdd(x1-1, y1-1, node)
+        try:
+            if matrixPoints[x1-1][y1-1]<freeSpaceValue:
+                frontierAdd(x1-1, y1-1, node)
+        except IndexError:
+            pass
+            
         #UM
-        if matrixPoints[x1][y1-1]<freeSpaceValue:
-            frontierAdd(x1, y1-1, node)
+        try:
+            if matrixPoints[x1][y1-1]<freeSpaceValue:
+                frontierAdd(x1, y1-1, node)
+        except IndexError:
+            pass
         #UR
-        if matrixPoints[x1+1][y1-1]<freeSpaceValue:
-            frontierAdd(x1+1, y1-1, node)
+        try:
+            if matrixPoints[x1+1][y1-1]<freeSpaceValue:
+                frontierAdd(x1+1, y1-1, node)
+        except IndexError:
+            pass
         #RM
-        if matrixPoints[x1+1][y1]<freeSpaceValue:
-            frontierAdd(x1+1, y1, node)
+        try:
+            if matrixPoints[x1+1][y1]<freeSpaceValue:
+                frontierAdd(x1+1, y1, node)
+        except IndexError:
+            pass
         #RB
-        if matrixPoints[x1+1][y1+1]<freeSpaceValue:
-            frontierAdd(x1+1, y1+1, node)
+        try:
+            if matrixPoints[x1+1][y1+1]<freeSpaceValue:
+                frontierAdd(x1+1, y1+1, node)
+        except IndexError:
+            pass
         #BM
-        if matrixPoints[x1][y1+1]<freeSpaceValue:
-            frontierAdd(x1, y1+1, node)
+        try:
+            if matrixPoints[x1][y1+1]<freeSpaceValue:
+                frontierAdd(x1, y1+1, node)
+        except IndexError:
+            pass
         #BL
-        if matrixPoints[x1-1][y1+1]<freeSpaceValue:
-            frontierAdd(x1-1, y1+1, node)
+        try:
+            if matrixPoints[x1-1][y1+1]<freeSpaceValue:
+                frontierAdd(x1-1, y1+1, node)
+        except IndexError:
+            pass
         #LM
-        if matrixPoints[x1-1][y1]<freeSpaceValue:
-            frontierAdd(x1-1, y1, node)
+        try:
+            if matrixPoints[x1-1][y1]<freeSpaceValue:
+                frontierAdd(x1-1, y1, node)
+        except IndexError:
+            pass
             
         displayProgress(arrayTravelled, arrayFrontier)
           
