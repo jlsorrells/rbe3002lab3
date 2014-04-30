@@ -13,7 +13,9 @@ from nav_msgs.msg._OccupancyGrid import OccupancyGrid
 from rospy.client import wait_for_message
 from nav_msgs.srv import *
 from numpy.matlib import rand
+import numpy
 import random
+import math
 from nav_msgs.msg._GridCells import GridCells
 from random import randint
 
@@ -93,50 +95,73 @@ def driveStraight(speed, distance):
     #===========================================================================
     #pub.publish(twist)
 
+def spinWheels(u1, u2, time):
+    global pub
+
+    lin_vel = 0.5 * (u1 + u2)            #Determines the linear velocity of base based on the wheels
+    ang_vel = (1 / .352) * (u1 - u2)        #Determines the angular velocity of base bread on the wheels.
+
+    twist_msg = Twist();            #Creates two messages: a name-maker and a program killer
+    stop_msg = Twist();
+
+    twist_msg.linear.x = lin_vel        #Populate messages with data.
+    twist_msg.angular.z = ang_vel
+    stop_msg.linear.x = 0
+    stop_msg.angular.z = 0
+    
+    #While the specified amount of time has not elapsed, send Twist messages.
+    now = rospy.Time.now().secs
+    while (rospy.Time.now().secs - now <= time and not rospy.is_shutdown()):
+        pub.publish(twist_msg)
+    pub.publish(stop_msg)
+
 #takes in an angle and rotates - version from lab2_solution.py
-def rotate(angle):
-    global odom_list
-    global pose
-
-    #This node was created using Coordinate system transforms and numpy arrays.
-    #The goal is measured in the turtlebot's frame, transformed to the odom.frame 
-    transformer = tf.TransformerROS()	
-    rotation = numpy.array([[math.cos(angle), -math.sin(angle), 0],	#Create goal rotation
-                            [math.sin(angle), math.cos(angle), 0],
-                            [0,          0,          1]])
-
-    #Get transforms for frames
-    odom_list.waitForTransform('odom', 'base_footprint', rospy.Time(0), rospy.Duration(4.0))
-    (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
-    T_o_t = transformer.fromTranslationRotation(trans, rot)
-    R_o_t = T_o_t[0:3,0:3]
-
-    #Setup goal matrix
-    goal_rot = numpy.dot(rotation, R_o_t)
-    goal_o = numpy.array([[goal_rot[0,0], goal_rot[0,1], goal_rot[0,2], T_o_t[0,3]],
-                    [goal_rot[1,0], goal_rot[1,1], goal_rot[1,2], T_o_t[1,3]],
-                    [goal_rot[2,0], goal_rot[2,1], goal_rot[2,2], T_o_t[2,3]],
-                    [0,             0,             0,             1]])
-
-    #Continues creating and matching coordinate transforms.
-    done = False
-    while (not done and not rospy.is_shutdown()):
-        (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
-        state = transformer.fromTranslationRotation(trans, rot)
-        within_tolerance = abs((state - goal_o)) < .1
-        if ( within_tolerance.all() ):
-            spinWheels(0,0,0)
-            done = True
-        else:
-            if (angle > 0):
-                spinWheels(.1,-.1,.1)
-            else:
-                spinWheels(-.1,.1,.1)
-	rospy.sleep(rospy.Duration(0, 500000))
-
+#===============================================================================
+# def rotate(angle):
+#     global odom_list
+#     global pose
+#     
+#     odom_list = tf.TransformListener()
+# 
+#     #This node was created using Coordinate system transforms and numpy arrays.
+#     #The goal is measured in the turtlebot's frame, transformed to the odom.frame 
+#     transformer = tf.TransformerROS()	
+#     rotation = numpy.array([[math.cos(angle), -math.sin(angle), 0],	#Create goal rotation
+#                             [math.sin(angle), math.cos(angle), 0],
+#                             [0,          0,          1]])
+# 
+#     #Get transforms for frames
+#     odom_list.waitForTransform('odom', 'base_footprint', rospy.Time(0), rospy.Duration(4.0))
+#     (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
+#     T_o_t = transformer.fromTranslationRotation(trans, rot)
+#     R_o_t = T_o_t[0:3,0:3]
+# 
+#     #Setup goal matrix
+#     goal_rot = numpy.dot(rotation, R_o_t)
+#     goal_o = numpy.array([[goal_rot[0,0], goal_rot[0,1], goal_rot[0,2], T_o_t[0,3]],
+#                     [goal_rot[1,0], goal_rot[1,1], goal_rot[1,2], T_o_t[1,3]],
+#                     [goal_rot[2,0], goal_rot[2,1], goal_rot[2,2], T_o_t[2,3]],
+#                     [0,             0,             0,             1]])
+# 
+#     #Continues creating and matching coordinate transforms.
+#     done = False
+#     while (not done and not rospy.is_shutdown()):
+#         (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
+#         state = transformer.fromTranslationRotation(trans, rot)
+#         within_tolerance = abs((state - goal_o)) < .1
+#         if ( within_tolerance.all() ):
+#             spinWheels(0,0,0)
+#             done = True
+#         else:
+#             if (angle > 0):
+#                 spinWheels(.1,-.1,.1)
+#             else:
+#                 spinWheels(-.1,.1,.1)
+# 	rospy.sleep(rospy.Duration(0, 500000))
+#===============================================================================
 
 #Accepts an angle and makes the robot rotate around it.
-def rotate2(angle):
+def rotate(angle):
     
     global pub
     global position
@@ -195,7 +220,8 @@ def rotate2(angle):
             twist.angular.z = -(1.0 - (ratio - 0.7)*13.3/3.0) * sign(distance)
         else:
             #twist.angular.z = -1#sign(distance)
-            if orientation > desired_orientation:
+            temp = orientation - desired_orientation
+            if (temp >= 0 and temp <= pi) or (temp >= -2*pi and temp <= -1*pi):
                 twist.angular.z = -1
                 #print "rotate left"
                 #print desired_orientation
@@ -251,7 +277,8 @@ def combineMaps2(localMap, globalMap):
     newGrid.data = globalMap.data
     
     #localMap.info.origin.position.y += localMapWidth * localMap.info.resolution / 2
-    
+    #print "local map origin, global = %s\n%s"%(localMap.info.origin.position,globalMap.info.origin.position)
+    #print "local map resolution = %s"%(localMap.info.resolution)
     #set n location
     if localMap.info.origin.position.x < globalMap.info.origin.position.x:
         tempX = 0
@@ -281,7 +308,7 @@ def combineMaps2(localMap, globalMap):
     else:
         R = 0
     #calculate lower bound
-    #print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
+    #print "n,GWidth,LWitdh,g data = %s,%s,%s,%s"%(n, globalMapWidth, localMapWidth,len(globalMap.data))
 
     if localMap.info.origin.position.y < globalMap.info.origin.position.y:
         D = globalMap.info.origin.position.y/globalMap.info.resolution - localMap.info.origin.position.y/localMap.info.resolution
@@ -308,7 +335,7 @@ def combineMaps2(localMap, globalMap):
             #if newGrid.data[tempGLoc] < localMap.data[tempLLoc]:
             #print "tempG,tempL = %s,%s"%(tempGLoc,tempLLoc)
             newGrid.data[tempGLoc] = localMap.data[tempLLoc]
-
+    #print "done combining maps"
     return newGrid
 
 def combineMaps(localMap, globalMap):
@@ -373,8 +400,8 @@ def combineMaps(localMap, globalMap):
 
 def expandObstacle(inputMap):
     
-    robotRadius = .3#amount to expand obstacles by
-    expandedObsVal = 0.3#how sure we are that things near obstacles are also obstacles
+    robotRadius = .25#amount to expand obstacles by
+    expandedObsVal = 0.05#how sure we are that things near obstacles are also obstacles
     newGrid = OccupancyGrid()
     newGrid.data = list(inputMap.data)
     newGrid.header = inputMap.header
@@ -454,8 +481,8 @@ def read_map(msg):
         # print "finally got a global map from gmapping"
         #=======================================================================
         map = msg
-        map.info.height = 80
-        map.info.width = 80
+        map.info.height = 26
+        map.info.width = 26
         
     map = combineMaps2(expandObstacle(temp_map), map)
 
@@ -492,7 +519,7 @@ def read_new_goals(msg):
     #sort by closeness to robot
     (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
     temp.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
-    
+    #temp.sort(key=lambda g: randint(0,100), reverse=True)
     #save in global variable if we're done with the current goals
     if len(goals) <= 1:
         goals = temp
@@ -510,12 +537,17 @@ def set_next_goal():
         print "out of goals, moving randomly"
         goals[0] = Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0)
         print goals
+        start = Point(position[0], position[1], 0)
+        pathpoints, newpath = myclient(start, goals[0], map), True
+        if not pathpoints:
+            print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
+            set_next_goal()
         return
     
     #remove the top goal
     goals.pop(0)
     goals.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
-
+    #goals.sort(key=lambda g: randint(0,100), reverse=True)
     
     if set_next_goal.start == 0:
         set_next_goal.start = rospy.get_time()
@@ -530,6 +562,9 @@ def set_next_goal():
     
     start = Point(position[0], position[1], 0)
     pathpoints, newpath = myclient(start, goals[0], map), True
+    if not pathpoints:
+        print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
+        set_next_goal()
     #resort list because robot may have moved
 set_next_goal.start = 0    
 
@@ -621,7 +656,7 @@ if __name__ == "__main__":
                 #turn to the correct direction
                 rotate(angle)
                 #then drive the distance
-                driveStraight(0.3, distance)
+                driveStraight(0.2, distance)
                 #save previous
                 (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
                 orientation = atan2(2*(quat[1]*quat[0]+quat[3]*quat[2]),quat[3]**2+quat[0]**2-quat[1]**2-quat[2]**2)
@@ -629,7 +664,7 @@ if __name__ == "__main__":
                 
                 if newpath:
                     break
-            if abs(position[0] - goals[0].x) < .2 and abs(position[1] - goals[0].y) < .2:
+            if len(goals) > 0 and abs(position[0] - goals[0].x) < .2 and abs(position[1] - goals[0].y) < .2:
                 #if we're here, spin around, then go to the next place
                 twist = Twist()
                 twist.linear.x = 0
