@@ -641,8 +641,15 @@ if __name__ == "__main__":
     
     #print "Requesting path to (%s,%s)"%(goal.x, goal.y)
     
+    startTime = rospy.get_time()
+    
     newpath = False    
     while not rospy.is_shutdown():
+
+        if (rospy.get_time() - startTime) > 19*60:
+            print "\n\nDone generating map.\n\n"
+            break
+        
         (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
         orientation = atan2(2*(quat[1]*quat[0]+quat[3]*quat[2]),quat[3]**2+quat[0]**2-quat[1]**2-quat[2]**2)
         
