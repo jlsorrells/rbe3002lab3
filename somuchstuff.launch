@@ -18,7 +18,7 @@
   <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
     <param name="base_frame" value="base_footprint"/>
     <param name="odom_frame" value="odom"/>
-    <param name="map_update_interval" value="5.0"/>
+    <param name="map_update_interval" value="3.0"/>
     <param name="maxUrange" value="6.0"/>
     <param name="maxRange" value="8.0"/>
     <param name="sigma" value="0.05"/>
@@ -37,7 +37,7 @@
     <param name="angularUpdate" value="0.436"/>
     <param name="temporalUpdate" value="-1.0"/>
     <param name="resampleThreshold" value="0.5"/>
-    <param name="particles" value="80"/>
+    <param name="particles" value="40"/>
   <!--
     <param name="xmin" value="-50.0"/>
     <param name="ymin" value="-50.0"/>

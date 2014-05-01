@@ -130,7 +130,7 @@ def aStar(startnode, stuck = False):
         maxloops = maxloops - 1
         
         if stuck:
-            arrayFonontier.sort(key=lambda n: ((n.x-startnode.x)**2 + (n.y-startnode.y)**2)**.5, reverse=False)
+            arrayFrontier.sort(key=lambda n: ((n.x-startnode.x)**2 + (n.y-startnode.y)**2)**.5, reverse=False)
      
         node = arrayFrontier[0]
     
