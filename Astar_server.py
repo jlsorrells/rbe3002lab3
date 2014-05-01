@@ -111,7 +111,7 @@ def Astar_srv(req):
     
     
 
-def aStar(startnode):
+def aStar(startnode, stuck = False):
     global matrixPoints
     global arrayTravelled
     global arrayFrontier
@@ -123,12 +123,15 @@ def aStar(startnode):
     createArray(map.data)
     
     defaultFreeSpaceValue = 50
-    maxloops = 1000
+    maxloops = 700
     
     while len(arrayFrontier) != 0 and maxloops > 0:
         
         maxloops = maxloops - 1
         
+        if stuck:
+            arrayFonontier.sort(key=lambda n: ((n.x-startnode.x)**2 + (n.y-startnode.y)**2)**.5, reverse=False)
+     
         node = arrayFrontier[0]
     
         x1 = node.x
@@ -137,7 +140,7 @@ def aStar(startnode):
         #check if the point we're on is a obstacle
         if matrixPoints[x1][y1] >= defaultFreeSpaceValue:
             #if inside an obstacle, allow any cell that is less obstacley
-            freeSpaceValue = matrixPoints[x1][y1]
+            freeSpaceValue = matrixPoints[x1][y1] + stuck
         else:
             #otherwise, avoid all obstacles
             freeSpaceValue = defaultFreeSpaceValue
@@ -150,6 +153,9 @@ def aStar(startnode):
         if x1 == goal.x and y1 == goal.y:
             return node  
         
+        #if inside an obstacle, return as soon as we find freespace
+        if stuck and matrixPoints[x1][y1] < defaultFreeSpaceValue:
+            return node
         
         
         #UL
@@ -209,6 +215,13 @@ def aStar(startnode):
     #return 0 if no path is found
     rospy.logwarn("no path found from (%d, %d) to (%d, %d)", 
                  start.x, start.y, goal.x, goal.y)
+    
+    #if we are inside an obstacle and no path was found, try to drive to the 
+    #nearest free space cell (regardless of obstacles)
+    if (stuck == False) and (len(arrayTravelled) == 1) and (matrixPoints[startnode.x][startnode.y] >= defaultFreeSpaceValue):
+        rospy.logwarn("robot seems to be inside an obstacle; returning shortest path to free space")
+        return aStar(startnode, True)
+    
     return 0
         
     

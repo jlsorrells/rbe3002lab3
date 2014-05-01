@@ -532,10 +532,10 @@ def set_next_goal():
     
     (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
         
-    if len(goals) <= 1:
+    if len(goals) < 1:
         #do nothing if no more goals
         print "out of goals, moving randomly"
-        goals[0] = Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0)
+        goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
         print goals
         start = Point(position[0], position[1], 0)
         pathpoints, newpath = myclient(start, goals[0], map), True
@@ -565,7 +565,7 @@ def set_next_goal():
     if not pathpoints:
         print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
         set_next_goal()
-    #resort list because robot may have moved
+    
 set_next_goal.start = 0    
 
     
