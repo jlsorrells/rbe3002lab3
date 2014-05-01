@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="rviz" type="rviz" name="rviz">
+   <!--rosparam file="/home/test/.rviz/lab3config.rviz" command="load"/-->
+  </node>
+  <node pkg="lab3" type="Astar_server.py" name="Astar_server"/>
+  <node pkg="lab3" type="frontier_finder.py" name="frontier_finder"/>
+  <node pkg="lab3" type="path_following.py" name="path_following"/>
+</launch>

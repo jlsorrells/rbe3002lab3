@@ -530,41 +530,45 @@ def read_new_goals(msg):
 def set_next_goal():
     global goals
     
-    (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
+    try:
+        (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
+            
+        if len(goals) < 2:
+            #do nothing if no more goals
+            print "out of goals, moving randomly"
+            goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
+            print goals
+            start = Point(position[0], position[1], 0)
+            pathpoints, newpath = myclient(start, goals[0], map), True
+            if not pathpoints:
+                print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
+                set_next_goal()
+            return
         
-    if len(goals) < 1:
-        #do nothing if no more goals
-        print "out of goals, moving randomly"
-        goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
-        print goals
+        #remove the top goal
+        goals.pop(0)
+        goals.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
+        #goals.sort(key=lambda g: randint(0,100), reverse=True)
+        
+        if set_next_goal.start == 0:
+            set_next_goal.start = rospy.get_time()
+        
+        if (rospy.get_time() - set_next_goal.start) < 5*60:
+            goals = []
+            print "early, using random goals"
+            goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
+        
+        print "moving on to next goal"
+        #print goals[0]
+        
         start = Point(position[0], position[1], 0)
         pathpoints, newpath = myclient(start, goals[0], map), True
         if not pathpoints:
             print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
             set_next_goal()
-        return
-    
-    #remove the top goal
-    goals.pop(0)
-    goals.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
-    #goals.sort(key=lambda g: randint(0,100), reverse=True)
-    
-    if set_next_goal.start == 0:
-        set_next_goal.start = rospy.get_time()
-    
-    if (rospy.get_time() - set_next_goal.start) < 5*60:
-        goals = []
-        print "early, using random goals"
+    except IndexError:
         goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
-    
-    print "moving on to next goal"
-    print goals[0]
-    
-    start = Point(position[0], position[1], 0)
-    pathpoints, newpath = myclient(start, goals[0], map), True
-    if not pathpoints:
-        print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
-        set_next_goal()
+        
     
 set_next_goal.start = 0    
 
