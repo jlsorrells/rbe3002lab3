@@ -6,6 +6,8 @@ from nav_msgs.msg._GridCells import GridCells
 from geometry_msgs.msg._Point import Point
 from math import trunc
 
+#this is basically the same as the expand obstacles function, 
+#but instead of adding the value of a cell to nearby cells, it save the location of the cell
 def read_map(msg):
     global goal_pub
     

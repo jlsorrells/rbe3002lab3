@@ -10,6 +10,7 @@ from numpy import sign, ndarray
 from visualization_msgs.msg._Marker import Marker
 from lab3.srv import *
 
+#a class to hold x,y coordinates and a cost
 class point:
     def __init__(self, x1, y1, Parent, Cost):
         self.x = x1
@@ -23,6 +24,7 @@ class point:
         else:
             return False
             
+    #determines this node's cost based on its parent's cost
     def getCost(self):
         global arrayTravelled
         global start
@@ -39,6 +41,7 @@ class point:
         
         return cost
     
+    #returns waypoints to go from start to this node
     def getPath(self):
         global arrayTravelled
         global start
@@ -90,11 +93,16 @@ def Astar_srv(req):
     goal.x = int((goal.x - map.info.origin.position.x) / map.info.resolution) - map.info.width
     goal.y = int((-goal.y + map.info.origin.position.y) / map.info.resolution)
     
+    #clear previous display
     displayPath([])
     displayWaypoints([])
+    
+    #get new path
     result = aStar(point(start.x, start.y, 0, 0))
     rospy.sleep(rospy.Duration(.05, 0))
     waypoints = []
+    
+    #return the waypoints if we found a path
     if result != 0:
         waypoints = result.getPath()
         displayProgress(arrayTravelled, arrayFrontier)
@@ -125,10 +133,13 @@ def aStar(startnode, stuck = False):
     defaultFreeSpaceValue = 50
     maxloops = 700
     
+    #go until out of frontier cells or we've been going for too long
     while len(arrayFrontier) != 0 and maxloops > 0:
         
         maxloops = maxloops - 1
         
+        #if we're stuck inside an obstacle, use breadth first to find any free space cell
+        #instead of trying to get to the goal
         if stuck:
             arrayFrontier.sort(key=lambda n: ((n.x-startnode.x)**2 + (n.y-startnode.y)**2)**.5, reverse=False)
      
@@ -140,6 +151,7 @@ def aStar(startnode, stuck = False):
         #check if the point we're on is a obstacle
         if matrixPoints[x1][y1] >= defaultFreeSpaceValue:
             #if inside an obstacle, allow any cell that is less obstacley
+            #if we are stuck, allow cells that are equally obstacley
             freeSpaceValue = matrixPoints[x1][y1] + stuck
         else:
             #otherwise, avoid all obstacles
@@ -150,6 +162,7 @@ def aStar(startnode, stuck = False):
         #print "exploring point (%s, %s)"%(x1,y1)
         arrayFrontier.pop(0)
         
+        #check if we are at the goal
         if x1 == goal.x and y1 == goal.y:
             return node  
         
@@ -157,14 +170,14 @@ def aStar(startnode, stuck = False):
         if stuck and matrixPoints[x1][y1] < defaultFreeSpaceValue:
             return node
         
-        
+        #try to add all the surrounding cells to the frontier
+        #except if the cell is outside of the map
         #UL
         try:
             if matrixPoints[x1-1][y1-1]<freeSpaceValue:
                 frontierAdd(x1-1, y1-1, node)
         except IndexError:
-            pass
-            
+            pass  
         #UM
         try:
             if matrixPoints[x1][y1-1]<freeSpaceValue:
@@ -212,7 +225,6 @@ def aStar(startnode, stuck = False):
           
         #rospy.sleep(rospy.Duration(.05, 0))
     
-    #return 0 if no path is found
     rospy.logwarn("no path found from (%d, %d) to (%d, %d)", 
                  start.x, start.y, goal.x, goal.y)
     
@@ -222,10 +234,11 @@ def aStar(startnode, stuck = False):
         rospy.logwarn("robot seems to be inside an obstacle; returning shortest path to free space")
         return aStar(startnode, True)
     
+    #return 0 if no path is found
     return 0
         
     
-
+#we used the absolute distance to goal as our heuristic
 def getHeuristics(x1, y1):
     #heuristic = max(abs(x1-goal.x), abs(y1-goal.y))
     heuristic = ((x1-goal.x)**2+(y1-goal.y)**2)**.5
@@ -253,111 +266,114 @@ def frontierAdd(x1, y1, node):
             return
     
     
+    #insert the node into the sorted frontier
     n = 0
     for node2 in arrayFrontier:
         if newPoint.cost > node2.cost:
             n += 1
         else:
-            break
-       
+            break 
     arrayFrontier.insert(n, newPoint)
 
-def read_map(msg):
-    global map 
-    global arrayTravelled
-    global arrayFrontier
+#===============================================================================
+# def read_map(msg):
+#     global map 
+#     global arrayTravelled
+#     global arrayFrontier
+#     
+#     #save the most recent map
+#     map = msg 
+#     
+#     displayPath([])
+#     displayWaypoints([])
+#     result = aStar(point(start.x, start.y, 0, 0))
+#     rospy.sleep(rospy.Duration(.05, 0))
+#     if result != 0:
+#         result.getPath()
+#     displayProgress(arrayTravelled, arrayFrontier)
+#     
+#     #print msg
+#     #print "\n"
+#     
+# def read_goal(msg):
+#     global goal
+#     global map
+#     
+#     goal = msg.pose.position
+#     
+#     marker = Marker()
+#     marker.header.frame_id = "map"
+#     marker.type = Marker.TEXT_VIEW_FACING
+#     marker.pose = msg.pose
+#     marker.text = "G"
+#     marker.header.stamp = rospy.Time.now()
+#     marker.ns = "lab3markers"
+#     marker.id = 0
+#     marker.scale.x = map.info.resolution
+#     marker.scale.y = map.info.resolution
+#     marker.scale.z = map.info.resolution
+#     marker.color.r = 1
+#     marker.color.a = 1
+#     marker.action = Marker.ADD
+#     marker_pub.publish(marker)
+#     
+#     #convert to grid cell
+#     goal.x = int(goal.x/map.info.resolution + 0.5*sign(goal.x))
+#     goal.y = int(goal.y/map.info.resolution + 0.5*sign(goal.y))
+#     #convert so that upper left is 0,0
+#     goal.x = goal.x + map.info.width/2
+#     goal.y = -goal.y + map.info.height/2
+#     #print goal
+#     
+#     displayPath([])
+#     displayWaypoints([])
+#     result = aStar(point(start.x, start.y, 0, 0))
+#     rospy.sleep(rospy.Duration(.05, 0))
+#     if result != 0:
+#         result.getPath()
+#     displayProgress(arrayTravelled, arrayFrontier)
+#     
+#     
+# def read_start(msg):
+#     global start
+#     global map
+#     
+#     start = msg.pose.pose.position
+#     
+#     marker = Marker()
+#     marker.header.frame_id = "map"
+#     marker.type = Marker.TEXT_VIEW_FACING
+#     marker.pose = msg.pose.pose
+#     marker.text = "S"
+#     marker.header.stamp = rospy.Time.now()
+#     marker.ns = "lab3markers"
+#     marker.id = 1
+#     marker.scale.x = map.info.resolution
+#     marker.scale.y = map.info.resolution
+#     marker.scale.z = map.info.resolution
+#     marker.color.r = 1
+#     marker.color.a = 1
+#     marker.action = Marker.ADD
+#     marker_pub.publish(marker)
+#     
+#     #convert to grid cell
+#     start.x = int(start.x/map.info.resolution + 0.5*sign(start.x))
+#     start.y = int(start.y/map.info.resolution + 0.5*sign(start.y))
+#     #convert so that upper left is 0,0
+#     start.x = start.x + map.info.width/2
+#     start.y = -start.y + map.info.height/2
+#     #print start
+#     
+#     displayPath([])
+#     displayWaypoints([])
+#     result = aStar(point(start.x, start.y, 0, 0))
+#     rospy.sleep(rospy.Duration(.05, 0))
+#     if result != 0:
+#         result.getPath()
+#     displayProgress(arrayTravelled, arrayFrontier)
+#===============================================================================
     
-    #save the most recent map
-    map = msg 
-    
-    displayPath([])
-    displayWaypoints([])
-    result = aStar(point(start.x, start.y, 0, 0))
-    rospy.sleep(rospy.Duration(.05, 0))
-    if result != 0:
-        result.getPath()
-    displayProgress(arrayTravelled, arrayFrontier)
-    
-    #print msg
-    #print "\n"
-    
-def read_goal(msg):
-    global goal
-    global map
-    
-    goal = msg.pose.position
-    
-    marker = Marker()
-    marker.header.frame_id = "map"
-    marker.type = Marker.TEXT_VIEW_FACING
-    marker.pose = msg.pose
-    marker.text = "G"
-    marker.header.stamp = rospy.Time.now()
-    marker.ns = "lab3markers"
-    marker.id = 0
-    marker.scale.x = map.info.resolution
-    marker.scale.y = map.info.resolution
-    marker.scale.z = map.info.resolution
-    marker.color.r = 1
-    marker.color.a = 1
-    marker.action = Marker.ADD
-    marker_pub.publish(marker)
-    
-    #convert to grid cell
-    goal.x = int(goal.x/map.info.resolution + 0.5*sign(goal.x))
-    goal.y = int(goal.y/map.info.resolution + 0.5*sign(goal.y))
-    #convert so that upper left is 0,0
-    goal.x = goal.x + map.info.width/2
-    goal.y = -goal.y + map.info.height/2
-    #print goal
-    
-    displayPath([])
-    displayWaypoints([])
-    result = aStar(point(start.x, start.y, 0, 0))
-    rospy.sleep(rospy.Duration(.05, 0))
-    if result != 0:
-        result.getPath()
-    displayProgress(arrayTravelled, arrayFrontier)
-    
-    
-def read_start(msg):
-    global start
-    global map
-    
-    start = msg.pose.pose.position
-    
-    marker = Marker()
-    marker.header.frame_id = "map"
-    marker.type = Marker.TEXT_VIEW_FACING
-    marker.pose = msg.pose.pose
-    marker.text = "S"
-    marker.header.stamp = rospy.Time.now()
-    marker.ns = "lab3markers"
-    marker.id = 1
-    marker.scale.x = map.info.resolution
-    marker.scale.y = map.info.resolution
-    marker.scale.z = map.info.resolution
-    marker.color.r = 1
-    marker.color.a = 1
-    marker.action = Marker.ADD
-    marker_pub.publish(marker)
-    
-    #convert to grid cell
-    start.x = int(start.x/map.info.resolution + 0.5*sign(start.x))
-    start.y = int(start.y/map.info.resolution + 0.5*sign(start.y))
-    #convert so that upper left is 0,0
-    start.x = start.x + map.info.width/2
-    start.y = -start.y + map.info.height/2
-    #print start
-    
-    displayPath([])
-    displayWaypoints([])
-    result = aStar(point(start.x, start.y, 0, 0))
-    rospy.sleep(rospy.Duration(.05, 0))
-    if result != 0:
-        result.getPath()
-    displayProgress(arrayTravelled, arrayFrontier)
-    
+#sends the explored and frontier cells to rviz
 def displayProgress(e_array, f_array):
     global explored_pub
     global frontier_pub
@@ -386,6 +402,7 @@ def displayProgress(e_array, f_array):
     cells.cells = array
     frontier_pub.publish(cells)
     
+#sends the complete path to the goal to rviz
 def displayPath(p_array):
     global path_pub
     global map
@@ -405,7 +422,7 @@ def displayPath(p_array):
     cells.cells = array
     path_pub.publish(cells)
 
-
+#sends the waypoints to rviz
 def displayWaypoints(w_array):
     global marker_pub
     global map
@@ -420,6 +437,7 @@ def displayWaypoints(w_array):
         marker.type = Marker.ARROW
         marker_pub.publish(marker)
     
+    #publish new markers
     for i in range(1,len(w_array)):
         marker = Marker()
         marker.header.frame_id = "map"
@@ -445,6 +463,7 @@ def displayWaypoints(w_array):
 #I guess this is how to make a static variable in python
 displayWaypoints.prevWaypoints = 0
 
+#calculate waypoints given a complete path
 def pathWaypoints(path):
     endpoints = []
     previous_x_velocity = 0

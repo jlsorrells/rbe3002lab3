@@ -29,16 +29,18 @@ def myclient(start, goal, map):
     except rospy.ServiceException, e:
         print "Service call failed: %s"%e
         
-def getmap():
-     global map
-     rospy.wait_for_service('dynamic_map')
-     try:
-         myservice = rospy.ServiceProxy('dynamic_map', GetMap)
-         stuff = myservice()
-         return stuff.map
-     except rospy.ServiceException, e:
-         print "Service call failed: %s"%e
-         return map
+#===============================================================================
+# def getmap():
+#      global map
+#      rospy.wait_for_service('dynamic_map')
+#      try:
+#          myservice = rospy.ServiceProxy('dynamic_map', GetMap)
+#          stuff = myservice()
+#          return stuff.map
+#      except rospy.ServiceException, e:
+#          print "Service call failed: %s"%e
+#          return map
+#===============================================================================
          
 #This function accepts a speed and a distance for the robot to move in a straight line
 def driveStraight(speed, distance):
@@ -67,7 +69,8 @@ def driveStraight(speed, distance):
         #ramps up from speed/5 to speed over the first 20% of the distance, then down to 0 over the last 30%
         ratio = ((start_position[0]-position[0])**2+(start_position[1]-position[1])**2)**.5 / distance
         
-        #dont actually ramp
+        #dont actually ramp, because we're constantly redoing A* and getting new paths
+        #which confuses the ramping
         ratio = 0.5
         
         if ratio < .2:
@@ -95,72 +98,7 @@ def driveStraight(speed, distance):
     #===========================================================================
     #pub.publish(twist)
 
-def spinWheels(u1, u2, time):
-    global pub
-
-    lin_vel = 0.5 * (u1 + u2)            #Determines the linear velocity of base based on the wheels
-    ang_vel = (1 / .352) * (u1 - u2)        #Determines the angular velocity of base bread on the wheels.
-
-    twist_msg = Twist();            #Creates two messages: a name-maker and a program killer
-    stop_msg = Twist();
-
-    twist_msg.linear.x = lin_vel        #Populate messages with data.
-    twist_msg.angular.z = ang_vel
-    stop_msg.linear.x = 0
-    stop_msg.angular.z = 0
-    
-    #While the specified amount of time has not elapsed, send Twist messages.
-    now = rospy.Time.now().secs
-    while (rospy.Time.now().secs - now <= time and not rospy.is_shutdown()):
-        pub.publish(twist_msg)
-    pub.publish(stop_msg)
-
-#takes in an angle and rotates - version from lab2_solution.py
-#===============================================================================
-# def rotate(angle):
-#     global odom_list
-#     global pose
-#     
-#     odom_list = tf.TransformListener()
-# 
-#     #This node was created using Coordinate system transforms and numpy arrays.
-#     #The goal is measured in the turtlebot's frame, transformed to the odom.frame 
-#     transformer = tf.TransformerROS()	
-#     rotation = numpy.array([[math.cos(angle), -math.sin(angle), 0],	#Create goal rotation
-#                             [math.sin(angle), math.cos(angle), 0],
-#                             [0,          0,          1]])
-# 
-#     #Get transforms for frames
-#     odom_list.waitForTransform('odom', 'base_footprint', rospy.Time(0), rospy.Duration(4.0))
-#     (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
-#     T_o_t = transformer.fromTranslationRotation(trans, rot)
-#     R_o_t = T_o_t[0:3,0:3]
-# 
-#     #Setup goal matrix
-#     goal_rot = numpy.dot(rotation, R_o_t)
-#     goal_o = numpy.array([[goal_rot[0,0], goal_rot[0,1], goal_rot[0,2], T_o_t[0,3]],
-#                     [goal_rot[1,0], goal_rot[1,1], goal_rot[1,2], T_o_t[1,3]],
-#                     [goal_rot[2,0], goal_rot[2,1], goal_rot[2,2], T_o_t[2,3]],
-#                     [0,             0,             0,             1]])
-# 
-#     #Continues creating and matching coordinate transforms.
-#     done = False
-#     while (not done and not rospy.is_shutdown()):
-#         (trans, rot) = odom_list.lookupTransform('odom', 'base_footprint', rospy.Time(0))
-#         state = transformer.fromTranslationRotation(trans, rot)
-#         within_tolerance = abs((state - goal_o)) < .1
-#         if ( within_tolerance.all() ):
-#             spinWheels(0,0,0)
-#             done = True
-#         else:
-#             if (angle > 0):
-#                 spinWheels(.1,-.1,.1)
-#             else:
-#                 spinWheels(-.1,.1,.1)
-# 	rospy.sleep(rospy.Duration(0, 500000))
-#===============================================================================
-
-#Accepts an angle and makes the robot rotate around it.
+#Accepts an angle and makes the robot rotate to it.
 def rotate(angle):
     
     global pub
@@ -211,7 +149,7 @@ def rotate(angle):
         elif ratio < 0:
             ratio = 0
             
-        #this stops all the ramping stuff
+        #this turns off all the ramping stuff
         ratio = 0.5
             
         if ratio < .2:
@@ -279,7 +217,7 @@ def combineMaps2(localMap, globalMap):
     #localMap.info.origin.position.y += localMapWidth * localMap.info.resolution / 2
     #print "local map origin, global = %s\n%s"%(localMap.info.origin.position,globalMap.info.origin.position)
     #print "local map resolution = %s"%(localMap.info.resolution)
-    #set n location
+    #determine the relative location of the maps
     if localMap.info.origin.position.x < globalMap.info.origin.position.x:
         tempX = 0
     else:
@@ -308,12 +246,12 @@ def combineMaps2(localMap, globalMap):
     else:
         R = 0
     #calculate lower bound
-    #print "n,GWidth,LWitdh,g data = %s,%s,%s,%s"%(n, globalMapWidth, localMapWidth,len(globalMap.data))
-
     if localMap.info.origin.position.y < globalMap.info.origin.position.y:
         D = globalMap.info.origin.position.y/globalMap.info.resolution - localMap.info.origin.position.y/localMap.info.resolution
     else:
         D = 0
+        
+    #print "n,GWidth,LWitdh,g data = %s,%s,%s,%s"%(n, globalMapWidth, localMapWidth,len(globalMap.data))
     
     n2 = 0
     n3 = 0
@@ -327,7 +265,8 @@ def combineMaps2(localMap, globalMap):
     D = int(D+0.5)
     
     #print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
-       
+      
+    #replace the use the value of the local map wherever the two maps overlap 
     for n2 in range(localMapWidth - U - D):
         for n3 in range(localMapWidth - L - R):
             tempGLoc = n + n2*globalMapWidth + n3
@@ -338,65 +277,67 @@ def combineMaps2(localMap, globalMap):
     #print "done combining maps"
     return newGrid
 
-def combineMaps(localMap, globalMap):
-        
-    print "combining maps"
-    
-    localMapWidth = localMap.info.width
-    globalMapWidth = globalMap.info.width
-    newGrid = OccupancyGrid()
-    newGrid.header = globalMap.header
-    newGrid.info = globalMap.info
-    newGrid.data = globalMap.data
-    
-    #set n location
-    start = localMap.info.origin.position
-    start.x += (localMap.info.width / 2 + 1)* localMap.info.resolution
-    start.y += localMap.info.height / 2 * localMap.info.resolution
-    
-    start.x = -(int((start.x - globalMap.info.origin.position.x) / globalMap.info.resolution) - globalMap.info.width)
-    start.y = -int((-start.y + globalMap.info.origin.position.y) / globalMap.info.resolution)
-    n = start.y * globalMapWidth + start.x
-    print "x,y = %s,%s"%(start.x,start.y)
-    #calculate upper bound
-    if len(globalMap.data) - n <= globalMapWidth * localMapWidth/2:
-        U = trunc((len(globalMap.data) -n -1)/globalMapWidth)
-    else:
-        U = localMapWidth/2
-    #calculate left bound
-    if n%globalMapWidth < localMapWidth/2:
-        L = n%globalMapWidth
-    else:
-        L = localMapWidth/2
-    #calculate right bound
-    if globalMapWidth - n%globalMapWidth < localMapWidth/2:
-        R = globalMapWidth - n%globalMapWidth
-    else:
-        R = localMapWidth/2-1
-    #calculate lower bound
-    print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
-    if n/globalMapWidth < localMapWidth/2:
-        D = trunc(n/globalMapWidth)
-    else:
-        D = localMapWidth/2-1
-    
-    n2 = 0
-    n3 = 0
-    
-    print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
-       
-    for n2 in range(int(U+D+1)):
-        for n3 in range(int(L+R+1)):
-            tempGLoc = int(n + globalMapWidth * (n2 - U) + (n3 - L))
-            tempLLoc = int((localMapWidth/2-L) + n3 + (L+R+1)*n2)
-            #if newGrid.data[tempGLoc] < localMap.data[tempLLoc]:
-            print "tempG,tempL = %s,%s"%(tempGLoc,tempLLoc)
-            print "size of local map = %s"%(len(localMap.data))
-            print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
-            print "\n"
-            newGrid.data[tempGLoc] = localMap.data[tempLLoc]
-
-    return newGrid
+#===============================================================================
+# def combineMaps(localMap, globalMap):
+#         
+#     print "combining maps"
+#     
+#     localMapWidth = localMap.info.width
+#     globalMapWidth = globalMap.info.width
+#     newGrid = OccupancyGrid()
+#     newGrid.header = globalMap.header
+#     newGrid.info = globalMap.info
+#     newGrid.data = globalMap.data
+#     
+#     #set n location
+#     start = localMap.info.origin.position
+#     start.x += (localMap.info.width / 2 + 1)* localMap.info.resolution
+#     start.y += localMap.info.height / 2 * localMap.info.resolution
+#     
+#     start.x = -(int((start.x - globalMap.info.origin.position.x) / globalMap.info.resolution) - globalMap.info.width)
+#     start.y = -int((-start.y + globalMap.info.origin.position.y) / globalMap.info.resolution)
+#     n = start.y * globalMapWidth + start.x
+#     print "x,y = %s,%s"%(start.x,start.y)
+#     #calculate upper bound
+#     if len(globalMap.data) - n <= globalMapWidth * localMapWidth/2:
+#         U = trunc((len(globalMap.data) -n -1)/globalMapWidth)
+#     else:
+#         U = localMapWidth/2
+#     #calculate left bound
+#     if n%globalMapWidth < localMapWidth/2:
+#         L = n%globalMapWidth
+#     else:
+#         L = localMapWidth/2
+#     #calculate right bound
+#     if globalMapWidth - n%globalMapWidth < localMapWidth/2:
+#         R = globalMapWidth - n%globalMapWidth
+#     else:
+#         R = localMapWidth/2-1
+#     #calculate lower bound
+#     print "n,GWidth,LWitdh = %s,%s,%s"%(n, globalMapWidth, localMapWidth)
+#     if n/globalMapWidth < localMapWidth/2:
+#         D = trunc(n/globalMapWidth)
+#     else:
+#         D = localMapWidth/2-1
+#     
+#     n2 = 0
+#     n3 = 0
+#     
+#     print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
+#        
+#     for n2 in range(int(U+D+1)):
+#         for n3 in range(int(L+R+1)):
+#             tempGLoc = int(n + globalMapWidth * (n2 - U) + (n3 - L))
+#             tempLLoc = int((localMapWidth/2-L) + n3 + (L+R+1)*n2)
+#             #if newGrid.data[tempGLoc] < localMap.data[tempLLoc]:
+#             print "tempG,tempL = %s,%s"%(tempGLoc,tempLLoc)
+#             print "size of local map = %s"%(len(localMap.data))
+#             print "U,L,R,D = %s,%s,%s,%s"%(U,L,R,D)
+#             print "\n"
+#             newGrid.data[tempGLoc] = localMap.data[tempLLoc]
+# 
+#     return newGrid
+#===============================================================================
 
 def expandObstacle(inputMap):
     
@@ -414,6 +355,7 @@ def expandObstacle(inputMap):
     #print "expanding obstacles"
     numExpansions = ceil(robotRadius/gridResolution)
     
+    #for each cell, increase the value of nearby cells proportional to this cell's value
     for n in range(len(inputArray)):
             
         if inputArray[n] > 0:
@@ -449,11 +391,10 @@ def expandObstacle(inputMap):
                     newGrid.data[tempLoc] += inputArray[n] * expandedObsVal
                     if newGrid.data[tempLoc] > 100:
                         newGrid.data[tempLoc] = 100
-    global map_pub
-    #for i in xrange(10000):
-        #map_pub.publish(newGrid)
+
     return newGrid
 
+#this reads local maps from gmapping
 def read_map(msg):
     global map 
     global arrayTravelled
@@ -464,7 +405,7 @@ def read_map(msg):
     global newpath
     global rotating
 
-    #because apperently it isn't a list already?
+    #because apparently it isn't a list already?
     msg.data = list(msg.data)
     
     #newpath = True
@@ -484,15 +425,18 @@ def read_map(msg):
         map.info.height = 26
         map.info.width = 26
         
+    #add this local map into our combined map
     map = combineMaps2(expandObstacle(temp_map), map)
 
     mapresolution = map.info.resolution
     start = Point(position[0], position[1], 0)
     
+    #redo A* since we got a new map
     pathpoints, newpath = myclient(start, goals[0], map), True
 
     #print "current location is (%s, %s)"%(start.x, start.y)
     if not pathpoints:
+        #try the next goal if the current one is now unreachable
         print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
         set_next_goal()
         
@@ -501,13 +445,15 @@ def read_map(msg):
     #     rospy.sleep(rospy.Duration(0.05))
     #===========================================================================
      
-    #wiat a bit so we aren't just constantly replanning   
+    #wait a bit so we don't just constantly replan if gmapping starts updating quickly  
     rospy.sleep(rospy.Duration(4.0))
         
     #print "returning from callback"
     
+#this reads the /map from gmapping
 def read_global_map(msg):
     global map
+    #forget about the previous local maps and use this global map
     map = expandObstacle(msg)
     
 def read_new_goals(msg):
@@ -521,6 +467,7 @@ def read_new_goals(msg):
     temp.sort(key=lambda g: ((g.x-position[0])**2 + (g.y-position[1])**2)**.5, reverse=False)
     #temp.sort(key=lambda g: randint(0,100), reverse=True)
     #save in global variable if we're done with the current goals
+    #otherwise, just ignore these and keep doing the previous goals
     if len(goals) <= 1:
         goals = temp
         
@@ -534,7 +481,7 @@ def set_next_goal():
         (position, quat) = listener.lookupTransform('/map', '/base_footprint', rospy.Time(0))
             
         if len(goals) < 2:
-            #do nothing if no more goals
+            #drive randomly if no more goals
             print "out of goals, moving randomly"
             goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
             print goals
@@ -553,6 +500,7 @@ def set_next_goal():
         if set_next_goal.start == 0:
             set_next_goal.start = rospy.get_time()
         
+        #use random goals for the first 5 minutes
         if (rospy.get_time() - set_next_goal.start) < 5*60:
             goals = []
             print "early, using random goals"
@@ -561,12 +509,15 @@ def set_next_goal():
         print "moving on to next goal"
         #print goals[0]
         
+        #redo A* since we got a new goal
         start = Point(position[0], position[1], 0)
         pathpoints, newpath = myclient(start, goals[0], map), True
         if not pathpoints:
+            #if this goal is unreachable, go to the next one
             print "unable to reach goal (%s, %s)"%(goals[0].x, goals[0].y)
             set_next_goal()
     except IndexError:
+        #just go to a random point if something is broken
         goals.append(Point(position[0] + randint(-20,20)/10.0, position[1] + randint(-20,20)/10.0,0))
         
     
@@ -586,29 +537,6 @@ if __name__ == "__main__":
     global rotating
     rotating = False
     map = 0
-    
-    #===========================================================================
-    # test1 = OccupancyGrid()
-    # test1.data = range(16)
-    # test1.info.width = 4
-    # test1.info.height = 4
-    # test1.info.resolution = 0.2
-    # test1.info.origin.position = Point(2,2,0)
-    # test2 = OccupancyGrid()
-    # test2.data = range(25)
-    # test2.info.width = 5
-    # test2.info.height = 5
-    # test2.info.resolution = 0.2
-    # test2.info.origin.position = Point(0,0,0)
-    # 
-    # map = combineMaps2(test1, test2)
-    # print map
-    # print map.data[20:25]
-    # print map.data[15:20]
-    # print map.data[10:15]
-    # print map.data[5:10]
-    # print map.data[0:5]
-    #===========================================================================
     
     rospy.init_node('barth_sorrells_wu_lab4_node')
     #===========================================================================
@@ -649,7 +577,8 @@ if __name__ == "__main__":
     
     newpath = False    
     while not rospy.is_shutdown():
-
+        
+        #don't go to another goal if after 19 minutes
         if (rospy.get_time() - startTime) > 19*60:
             print "\n\nDone generating map.\n\n"
             break
@@ -658,6 +587,7 @@ if __name__ == "__main__":
         orientation = atan2(2*(quat[1]*quat[0]+quat[3]*quat[2]),quat[3]**2+quat[0]**2-quat[1]**2-quat[2]**2)
         
         j = Point(position[0],position[1],0)
+        #if we have a path, follow it
         if pathpoints and len(pathpoints) > 0:
             for i in xrange(1,len(pathpoints)):
                 distance = ((pathpoints[i].x-j.x)**2+(pathpoints[i].y-j.y)**2)**.5
@@ -688,11 +618,13 @@ if __name__ == "__main__":
                     pub.publish(twist)
                     rospy.sleep(rospy.Duration(0.1))
                 set_next_goal()
+        #if we don't have a path, just spin around
         else:
             #print "spinning"
             rotate(orientation*180.0/pi+90)
             #print "done spinning"
             #print newpath
+        #wait for a new path
         while newpath == False and not rospy.is_shutdown():
             #print "spinning"
             rotate(orientation*180.0/pi+90)
